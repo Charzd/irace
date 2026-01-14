@@ -21,6 +21,11 @@ recoverFromFile <- function(filename, scenario = list())
       iraceResults$irace_version, ") different from this version of irace (",
       irace::irace_version, ").")
 
+  is_mo_file <- is.list(iraceResults$experiments) && !is.data.frame(iraceResults$experiments)
+  n_objs_file <- if(is_mo_file) length(iraceResults$experiments) else 1
+  if (is_mo_file) {
+      irace_note("Recovering Multi-Objective run with ", n_objs_file, " objectives.\n")
+  }
   # Restore part of scenario but not all.
   for (name in .irace.params.recover)
     scenario[[name]] <- iraceResults$scenario[[name]]
@@ -666,10 +671,57 @@ irace_run <- function(scenario)
     iraceResults$state <- race_state
     save_irace_logfile(iraceResults, logfile = scenario$logFile)
     # FIXME: Handle scenario$maxTime > 0
-    if (scenario$postselection && scenario$maxTime == 0 && floor(remainingBudget / max(scenario$blockSize, scenario$eachTest)) > 1L)
-      psRace(iraceResults, max_experiments = remainingBudget, iteration_elites = TRUE)
-    else
-      elite_configurations
+
+    final_elites <- NULL
+    if (scenario$postselection && scenario$maxTime == 0 && floor(remainingBudget / max(scenario$blockSize, scenario$eachTest)) > 1L){
+      final_elites <- psRace(iraceResults, max_experiments = remainingBudget, iteration_elites = TRUE)
+    } else {
+      final_elites <- elite_configurations
+    }
+
+    if (!scenario$quiet && !is.null(final_elites)) {
+      
+      experiments <- iraceResults$experiments
+      is_multiobjective <- is.list(experiments) && !is.data.frame(experiments)
+      
+      cat("\n# ------------------------------------------------------------------\n")
+      if (is_multiobjective) {
+        cat("# Pareto Front found (Non-dominated configurations):\n")
+      } else {
+        cat("# Best configuration(s) found:\n")
+      }
+
+      configurations_print(final_elites, metadata = scenario$debugLevel >= 1L)
+      cat("\n")
+      cat("# Mean Objective Values for these configurations:\n")
+      
+      elite_ids <- as.character(final_elites[[".ID."]])
+      costs_df <- data.frame(row.names = elite_ids)
+      
+      if (is_multiobjective) {
+        for (k in seq_along(experiments)) {
+          mat_obj <- experiments[[k]]
+          valid_ids <- intersect(elite_ids, colnames(mat_obj))
+          
+          if (length(valid_ids) > 0) {
+            sub_mat <- mat_obj[, valid_ids, drop = FALSE]
+            means <- colMeans(sub_mat, na.rm = TRUE)
+            costs_df[valid_ids, paste0("Objective ", k)] <- means
+          }
+        }
+      } else {
+        valid_ids <- intersect(elite_ids, colnames(experiments))
+        if (length(valid_ids) > 0) {
+          sub_mat <- experiments[, valid_ids, drop = FALSE]
+          means <- colMeans(sub_mat, na.rm = TRUE)
+          costs_df[valid_ids, "Cost"] <- means
+        }
+      }
+      print(costs_df)
+      cat("# ------------------------------------------------------------------\n")
+    }
+    
+    return(final_elites)
   }
 
   debugLevel <- scenario$debugLevel
@@ -683,6 +735,7 @@ irace_run <- function(scenario)
   allConfigurations <- allConfigurationsInit(scenario)
   irace_assert(is.integer(allConfigurations[[".ID."]]))
   nbUserConfigurations <- nrow(allConfigurations)
+  n_objs <- if(is.null(scenario$n_objectives)) 1L else scenario$n_objectives
 
   # To save the logs
   iraceResults <- list(
@@ -690,7 +743,14 @@ irace_run <- function(scenario)
     irace_version = irace_version,
     iterationElites = c(),
     allElites = list(),
-    experiments = matrix(nrow = 0L, ncol = 0L))
+    # MO: Initialize experiments as list of k matrices
+    experiments = if(n_objs > 1) {
+       replicate(n_objs, matrix(nrow = 0L, ncol = 0L), simplify = FALSE)
+    } else {
+       matrix(nrow = 0L, ncol = 0L)
+    }
+  )
+    ## experiments = matrix(nrow = 0L, ncol = 0L))
   model <- NULL
   nbConfigurations <- 0L
   elite_configurations <- data.frame(stringsAsFactors=FALSE)
@@ -893,14 +953,23 @@ irace_run <- function(scenario)
     iraceResults$allConfigurations <- allConfigurations
     race_state$save_recovery(iraceResults, logfile = scenario$logFile)
 
-
     # With elitist=TRUE and without targetEvaluator we should never re-run the
     # same configuration on the same (instance,seed) pair.
     if (scenario$elitist) {
-      irace_assert(sum(!is.na(iraceResults$experiments)) == experimentsUsed)
+      # MO: Adapted validation
+      # We assume that if it was executed for Obj1, it will also be executed for the rest
+      mat_check <- get_results_matrix(iraceResults$experiments)
+      irace_assert(sum(!is.na(mat_check)) == experimentsUsed)
+      
       if (is.null(scenario$targetEvaluator))
         irace_assert(experimentsUsed == nrow(race_state$experiment_log))
     }
+    # SO version
+    ## if (scenario$elitist) {
+    ##   irace_assert(sum(!is.na(iraceResults$experiments)) == experimentsUsed)
+    ##   if (is.null(scenario$targetEvaluator))
+    ##     irace_assert(experimentsUsed == nrow(race_state$experiment_log))
+    ## }
 
     if (remainingBudget <= 0) {
       catInfo("Stopped because budget is exhausted")
@@ -927,6 +996,7 @@ irace_run <- function(scenario)
                      else scenario$nbExperimentsPerIteration
 
     # Compute the number of configurations for this race.
+    n_old_instances <- nrow_multiobj(iraceResults$experiments)
     if (scenario$elitist && !firstRace) {
       nbConfigurations <-
         computeNbConfigurations(currentBudget, indexIteration,
@@ -934,7 +1004,8 @@ irace_run <- function(scenario)
                                 eachTest = scenario$eachTest,
                                 blockSize = blockSize,
                                 nElites = nrow(elite_configurations),
-                                nOldInstances = nrow(iraceResults$experiments),
+                                nOldInstances = n_old_instances,
+                                ## nOldInstances = nrow(iraceResults$experiments),
                                 newInstances = race_state$elitist_new_instances)
       # If we don't have enough budget, do not evaluate new instances.
       if (nbConfigurations <= minSurvival) {
@@ -944,7 +1015,8 @@ irace_run <- function(scenario)
           eachTest = scenario$eachTest,
           blockSize = blockSize,
           nElites = nrow(elite_configurations),
-          nOldInstances = nrow(iraceResults$experiments),
+          nOldInstances = n_old_instances,
+          ## nOldInstances = nrow(iraceResults$experiments),
           newInstances = race_state$elitist_new_instances)
       }
       # If still not enough budget, then try to do at least one test.
@@ -952,7 +1024,8 @@ irace_run <- function(scenario)
         nbConfigurations <- computeNbConfigurations(currentBudget, indexIteration = 1L,
           mu = 1L, eachTest = scenario$eachTest, blockSize = blockSize,
           nElites = nrow(elite_configurations),
-          nOldInstances = nrow(iraceResults$experiments),
+          nOldInstances = n_old_instances,
+          ## nOldInstances = nrow(iraceResults$experiments),
           newInstances = 0L)
       }
     } else {
@@ -996,10 +1069,21 @@ irace_run <- function(scenario)
     # happen before the first race due to the initial budget estimation.
     if (firstRace) {
       if (nbConfigurations < nrow(elite_configurations)) {
-        eliteRanks <- overall_ranks(iraceResults$experiments, test = scenario$testType)
+        # FIXME-MO: Se deberia implementar otra forma de rankear
+        #Continue using ranks as SO, but only with Obj1
+        exp_data <- get_results_matrix(iraceResults$experiments)
+        eliteRanks <- overall_ranks(exp_data, test = scenario$testType)
+        
         elite_configurations <- elite_configurations[order(eliteRanks), ]
         elite_configurations <- elite_configurations[seq_len(nbConfigurations), ]
       }
+    # SO version:
+    ## if (firstRace) {
+    ##   if (nbConfigurations < nrow(elite_configurations)) {
+    ##     eliteRanks <- overall_ranks(iraceResults$experiments, test = scenario$testType)
+    ##     elite_configurations <- elite_configurations[order(eliteRanks), ]
+    ##     elite_configurations <- elite_configurations[seq_len(nbConfigurations), ]
+    ##   }
     } else if (nbConfigurations <= nrow(elite_configurations)) {
       # Stop if  the number of configurations to produce is not greater than
       # the number of elites.
@@ -1137,11 +1221,24 @@ irace_run <- function(scenario)
     }
 
     # Get data from previous races.
-    elite_data <- if (scenario$elitist && nrow(elite_configurations))
-                    iraceResults$experiments[, as.character(elite_configurations[[".ID."]]), drop=FALSE]
-                  else NULL
+    # MO: Elite data extraction by list of matrices
+    elite_data <- if (scenario$elitist && nrow(elite_configurations)) {
+        ids_to_keep <- as.character(elite_configurations[[".ID."]])
+        if (n_objs > 1) {
+             lapply(iraceResults$experiments, function(m) m[, ids_to_keep, drop=FALSE])
+        } else {
+             iraceResults$experiments[, ids_to_keep, drop=FALSE]
+        }
+    } else NULL
+    # SO version:
+    ## elite_data <- if (scenario$elitist && nrow(elite_configurations))
+    ##                 iraceResults$experiments[, as.character(elite_configurations[[".ID."]]), drop=FALSE]
+    ##               else NULL
 
-    race_state$next_instance <- nrow(iraceResults$experiments) + 1L
+    current_rows <- nrow_multiobj(iraceResults$experiments)
+    race_state$next_instance <- current_rows + 1L
+    ## race_state$next_instance <- nrow(iraceResults$experiments) + 1L
+    
     # Add instances if needed.
     # Calculate budget needed for old instances assuming non elitist irace.
     if ((nrow(race_state$instances_log) - (race_state$next_instance - 1L))

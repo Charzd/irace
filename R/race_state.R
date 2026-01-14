@@ -90,8 +90,9 @@ RaceState <- R6Class("RaceState", lock_class = TRUE,
    update_experiment_log = function(output, instances, scenario) {
      # FIXME: The instances parameter is not needed.
      irace_assert(all.equal(rep(instances, each = length(unique(output[["configuration"]]))), output$instance))
-     # Extract results
-     self$experiment_log <- rbindlist(list(self$experiment_log, output), use.names=TRUE)
+     output_for_log <- copy(output)
+     self$experiment_log <- rbindlist(list(self$experiment_log, output), use.names=TRUE, fill=TRUE)
+     ## self$experiment_log <- rbindlist(list(self$experiment_log, output), use.names=TRUE)
      experiments_output_to_matrix(output, scenario)
    },
 

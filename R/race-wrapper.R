@@ -249,12 +249,17 @@ check_output_target_runner <- function(output, scenario, bound = NULL)
     return(output)
   }
 
+  n_objs <- if(is.null(scenario$n_objectives)) 1L else scenario$n_objectives
+
   err_msg <- output$error
   if (is.null(err_msg)) {
     if (is.null(output$cost)) {
       output$cost <- NULL # make sure to delete it.
     } else if (is_na_or_empty(output$cost)) {
       err_msg <- "The cost returned by targetRunner is not numeric!"
+    } else if (length(output$cost) != n_objs) {
+      err_msg <- paste0("The cost returned by targetRunner has length ", length(output$cost), 
+                         " but scenario expects ", n_objs, " objectives.")
     }
 
     if (is.null(output$time)) {
@@ -288,7 +293,8 @@ check_output_target_runner <- function(output, scenario, bound = NULL)
         }
       } else if (scenario$maxTime > 0 && (is.null(output$cost) || is.null(output$time))) {
         err_msg <- "The output of targetRunner must be two numbers 'cost time'!"
-      } else if (scenario$maxExperiments > 0 && is.null(output$cost)) {
+      } 
+      if (scenario$maxExperiments > 0 && is.null(output$cost)) {
         err_msg <- "The output of targetRunner must be one number 'cost'!"
       }
     }
@@ -487,25 +493,53 @@ target_runner_default <- function(experiment, scenario)
   debugLevel <- scenario$debugLevel
   cost <- time <- NULL
   err_msg <- output$error
+  n_objs <- if(is.null(scenario$n_objectives)) 1L else scenario$n_objectives
+
   if (is.null(err_msg)) {
     v_output <- parse_output(output$output, verbose = (debugLevel >= 2L))
-    if (length(v_output) == 1L) {
-      if (is.null(scenario$targetEvaluator)) {
-        cost <- v_output[1L]
+    ## MO: Parsing MO
+    n_values <- length(v_output)
+    if (n_values > 0) {
+      if (n_objs > 1) {
+         if (n_values >= n_objs) {
+             cost <- v_output[1:n_objs]
+             if (n_values >= 2) {
+                 time <- v_output[n_values] 
+             }
+         } else {
+             err_msg <- paste0("TargetRunner output ", n_values, " values, but MO-irace expects ", n_objs, " objectives.")
+         }
       } else {
-        time <- v_output[1L]
+          cost <- v_output[1L]
+          if (n_values > 1L) time <- v_output[2L]
       }
-    } else if (length(v_output) == 2L) {
-      cost <- v_output[1L]
-      time <- v_output[2L]
-    } else {
-      err_msg <- "The output of targetRunner should not be more than two numbers!"
+      
     }
   }
   list(cost = cost, time = time,
        error = err_msg, outputRaw = output$output,
        call = paste(cmd, args, collapse = " "))
 }
+
+
+# SO version:
+##     if (length(v_output) == 1L) {
+##       if (is.null(scenario$targetEvaluator)) {
+##         cost <- v_output[1L]
+##       } else {
+##         time <- v_output[1L]
+##       }
+##     } else if (length(v_output) == 2L) {
+##       cost <- v_output[1L]
+##       time <- v_output[2L]
+##     } else {
+##       err_msg <- "The output of targetRunner should not be more than two numbers!"
+##     }
+##   }
+##   list(cost = cost, time = time,
+##        error = err_msg, outputRaw = output$output,
+##        call = paste(cmd, args, collapse = " "))
+## }
 
 execute_experiments <- function(race_state, experiments, scenario)
 {
@@ -606,6 +640,17 @@ execute_experiments <- function(race_state, experiments, scenario)
       scenario = scenario,
       target_runner = target_runner)
   }
+
+  n_objs <- if(is.null(scenario$n_objectives)) 1L else scenario$n_objectives
+  if (n_objs > 1) {
+    target_output <- lapply(target_output, function(res) {
+        if (!is.null(res$cost) && is.atomic(res$cost)) {
+            res$cost <- list(res$cost)
+        }
+        res
+    })
+  }
+
   target_output
 }
 

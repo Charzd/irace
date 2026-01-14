@@ -110,9 +110,19 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
       # Remove rejected configurations.
       if (length(rejected_ids))
         conf_ids <- setdiff(conf_ids, rejected_ids)
-      experiments <- experiments[, conf_ids, drop = FALSE]
-      conf_needs <- matrixStats::colCounts(experiments, value = NA, useNames = TRUE)
-      n_done <- nrow(experiments) - min(conf_needs)
+      # MO: Assume integrity between objectives
+      if (is.list(experiments) && !is.data.frame(experiments)) {
+          experiments_matrix <- experiments[[1]][, conf_ids, drop = FALSE]
+      } else {
+          experiments_matrix <- experiments[, conf_ids, drop = FALSE]
+      }
+      conf_needs <- matrixStats::colCounts(experiments_matrix, value = NA, useNames = TRUE)
+      n_done <- nrow(experiments_matrix) - min(conf_needs)
+      # SO version:
+      ## experiments <- experiments[, conf_ids, drop = FALSE]
+      ## conf_needs <- matrixStats::colCounts(experiments, value = NA, useNames = TRUE)
+      ## n_done <- nrow(experiments) - min(conf_needs)
+
       # Remove any configuration that needs more than max_experiments.
       conf_needs <- conf_needs[conf_needs <= max_experiments]
       if (length(conf_needs) == 1L) {
@@ -239,8 +249,33 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
 
   # Generate new instances.
   generateInstances(race_state, scenario, max_experiments / nrow(elite_configurations), update = TRUE)
-  elite_data <- iraceResults$experiments[, as.character(elite_configurations[[".ID."]]), drop=FALSE]
-  race_state$next_instance <- nrow(elite_data) + 1L
+  
+  # MO: Safe elite_data asignation
+  n_logged <- nrow(race_state$instances_log)
+  experiments_safe <- iraceResults$experiments
+  if (is.list(experiments_safe) && !is.data.frame(experiments_safe)) {
+     if (nrow(experiments_safe[[1]]) > n_logged) {
+        for(k in seq_along(experiments_safe)) 
+           experiments_safe[[k]] <- experiments_safe[[k]][seq_len(n_logged), , drop=FALSE]
+     }
+  } else {
+     if (nrow(experiments_safe) > n_logged) 
+        experiments_safe <- experiments_safe[seq_len(n_logged), , drop=FALSE]
+  }
+  target_ids <- as.character(elite_configurations[[".ID."]])
+  if (is.list(experiments_safe) && !is.data.frame(experiments_safe)) {
+     elite_data <- vector("list", length(experiments_safe))
+     for(k in seq_along(experiments_safe)) {
+        elite_data[[k]] <- experiments_safe[[k]][, target_ids, drop=FALSE]
+     }
+     race_state$next_instance <- nrow(elite_data[[1]]) + 1L
+  } else {
+     elite_data <- experiments_safe[, target_ids, drop=FALSE]
+     race_state$next_instance <- nrow(elite_data) + 1L
+  }
+
+  ## elite_data <- iraceResults$experiments[, as.character(elite_configurations[[".ID."]]), drop=FALSE]
+  ## race_state$next_instance <- nrow(elite_data) + 1L
 
   irace_note("seed: ", race_state$seed,
     "\n# Configurations: ", nrow(elite_configurations),
@@ -251,6 +286,10 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
   scenario$elitistLimit <- 0L
   # FIXME: elitist_race should not require setting this, but it currently does.
   scenario$elitist <- TRUE
+
+  n_rows_elite <- if(is.list(elite_data) && !is.data.frame(elite_data))
+                     nrow(elite_data[[1]]) else nrow(elite_data)
+
   raceResults <- elitist_race(race_state,
     maxExp = max_experiments,
     minSurvival = 1L,
@@ -259,7 +298,8 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
     elite_data = elite_data,
     elitist_new_instances = 0L,
     # FIXME: This should be nrow(elite_data) + 1L if we have budget to evaluate on new instances.
-    firstTest = nrow(elite_data) / scenario$blockSize)
+    firstTest = n_rows_elite / scenario$blockSize)
+    ## firstTest = nrow(elite_data) / scenario$blockSize)
 
   elite_configurations <- extractElites(raceResults$configurations,
     nbElites = race_state$minSurvival, debugLevel = scenario$debugLevel)
@@ -286,8 +326,12 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
     iraceResults$state <- race_state
     # FIXME: This log should contain only information of what was done in the
     # psRace and avoid duplicating info from iraceResults.
+
+    n_res_rows <- if(is.list(raceResults$experiments) && !is.data.frame(raceResults$experiments)) 
+                     nrow(raceResults$experiments[[1]]) else nrow(raceResults$experiments)
     iraceResults$psrace_log <- list(configurations = elite_configurations,
-      instances = race_state$instances_log[seq_len(nrow(raceResults$experiments)), , drop = FALSE],
+      instances = race_state$instances_log[seq_len(n_res_rows), , drop = FALSE],
+      ## instances = race_state$instances_log[seq_len(nrow(raceResults$experiments)), , drop = FALSE],
       max_experiments = max_experiments,
       experiments = raceResults$experiments,
       elites = elite_configurations[[".ID."]])

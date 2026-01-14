@@ -245,7 +245,7 @@ trim <- function(str) trim_trailing(trim_leading(str))
 # rownames(z) <- setunion(rownames(x), rownames(y)) and
 # z[rownames(x), colnames(x)] <- x and z[rownames(y), colnames(y)] <- y, and
 # z[i, j] <- NA for all i,j not in x nor y.
-merge_matrix <- function(x, y)
+merge_matrix_2d <- function(x, y)
 {
   rownames_x <- rownames(x)
   colnames_x <- colnames(x)
@@ -276,6 +276,19 @@ merge_matrix <- function(x, y)
   # There must be a non-NA entry for each instance.
   irace_assert(all(rowAnyNotNAs(z)))
   return(z)
+}
+# MO: Merge_matrix for list of matrices
+merge_matrix <- function(x, y)
+{
+  if (is.list(x) && is.list(y) && !is.data.frame(x) && !is.data.frame(y)) {
+    irace_assert(length(x) == length(y))
+    z <- vector("list", length(x))
+    for (k in seq_along(x)) {
+      z[[k]] <- merge_matrix_2d(x[[k]], y[[k]])
+    }
+    return(z)
+  } 
+  return(merge_matrix_2d(x, y))
 }
 
 # FIXME: This may not work when working interactively. For example,
@@ -620,6 +633,109 @@ unlist_element <- function(x, element)
 # Extensions of matrixStats
 rowAnyNotNAs <- function(x, rows = NULL, cols = NULL, ..., useNames = FALSE)
   !rowAlls(x, rows = rows, cols = cols, value = NA, ..., useNames = useNames)
+
+# --- UTILS MO ---
+
+# Checks if any objective value is infinite (indicating rejection) across all result matrices
+is_infinite_multiobj <- function(results_list, rows=NULL, cols=NULL) {
+  if (!is.list(results_list) || is.data.frame(results_list)) return(is.infinite(results_list))
+  mat <- results_list[[1]]
+  if (!is.null(rows)) mat <- mat[rows, , drop=FALSE]
+  if (!is.null(cols)) mat <- mat[, cols, drop=FALSE]
+  
+  is_inf <- is.infinite(mat)
+  if (length(results_list) > 1) {
+    for (k in 2:length(results_list)) {
+      mat_k <- results_list[[k]]
+      if (!is.null(rows)) mat_k <- mat_k[rows, , drop=FALSE]
+      if (!is.null(cols)) mat_k <- mat_k[, cols, drop=FALSE]
+      is_inf <- is_inf | is.infinite(mat_k)
+    }
+  }
+  return(is_inf)
+}
+
+# Checks for NA values in the first matrix, assuming execution for all objectives
+is_na_multiobj <- function(results_list, rows=NULL, cols=NULL) {
+   if (!is.list(results_list) || is.data.frame(results_list)) return(is.na(results_list))
+   mat <- results_list[[1]]
+   if (!is.null(rows)) mat <- mat[rows, , drop=FALSE]
+   if (!is.null(cols)) mat <- mat[, cols, drop=FALSE]
+   
+   return(is.na(mat))
+}
+
+# Identifies rows with valid non-NA data across all objectives (requires complete data)
+rowAnyNotNAs_multiobj <- function(data, cols = NULL) {
+  if (is.list(data) && !is.data.frame(data)) {
+    valid_rows <- rowAnyNotNAs(data[[1]], cols)
+    if (length(data) > 1) {
+      for (k in 2:length(data)) {
+        valid_rows <- valid_rows & rowAnyNotNAs(data[[k]], cols)
+      }
+    }
+    return(valid_rows)
+  } else {
+    return(rowAnyNotNAs(data, cols))
+  }
+}
+
+# Identifies columns with valid data present in all objectives
+colAnyNotNAs_multiobj <- function(data) {
+  if (is.list(data) && !is.data.frame(data)) {
+    valid_cols <- colAnyNotNAs(data[[1]])
+    if (length(data) > 1) {
+      for (k in 2:length(data)) {
+        valid_cols <- valid_cols & colAnyNotNAs(data[[k]])
+      }
+    }
+    return(valid_cols)
+  } else {
+    return(colAnyNotNAs(data))
+  }
+}
+
+# get the number of rows
+nrow_multiobj <- function(data) {
+  if (is.list(data) && !is.data.frame(data)) nrow(data[[1]]) else nrow(data)
+}
+
+# Gets a specific objective matrix
+get_results_matrix <- function(data, k = 1) {
+  if (is.list(data) && !is.data.frame(data)) {
+    return(data[[k]])
+  }
+  return(data)
+}
+
+# Extends the results structure by appending empty rows
+extend_results_list <- function(results, all_rownames) {
+  if (is.list(results) && !is.data.frame(results)) {
+    for (k in seq_along(results)) {
+      results[[k]] <- rbind(results[[k]], rep_len(NA_real_, ncol(results[[k]])))
+      current_rows <- nrow(results[[k]])
+      rownames(results[[k]]) <- all_rownames[seq_len(current_rows)]
+    }
+    return(results)
+  } else {
+    results <- rbind(results, rep_len(NA_real_, ncol(results)))
+    current_rows <- nrow(results)
+    rownames(results) <- all_rownames[seq_len(current_rows)]
+    return(results)
+  }
+}
+
+# Subsets rows consistently across all objectives
+subset_results_rows <- function(results, valid_rows) {
+  if (is.list(results) && !is.data.frame(results)) {
+    for (k in seq_along(results)) {
+      results[[k]] <- results[[k]][valid_rows, , drop = FALSE]
+    }
+    return(results)
+  } else {
+    return(results[valid_rows, , drop = FALSE])
+  }
+}
 
 colAnyNotNAs <- function(x, rows = NULL, cols = NULL, ..., useNames = FALSE)
   !colAlls(x, rows = rows, cols = cols, value = NA, ..., useNames = useNames)
