@@ -228,8 +228,23 @@ testing_common <- function(configurations, scenario, iraceResults)
   iraceResults$testing <- testConfigurations(configurations, scenario)
   save_irace_logfile(iraceResults, logfile = scenario$logFile)
   irace_note ("Testing results (column number is configuration ID in no particular order):\n")
-  if (verbose) print(cbind(seeds = iraceResults$testing$seeds,
-                           as.data.frame(iraceResults$testing$experiments)))
+  if (verbose) {
+    experiments <- iraceResults$testing$experiments
+    
+    if (is.list(experiments) && !is.data.frame(experiments)) {
+      cat("# Multi-Objective Testing Results:\n")
+      for (k in 1:length(experiments)) {
+        cat(paste0("# Objective ", k, ":\n"))
+        print(cbind(seeds = iraceResults$testing$seeds,
+                    as.data.frame(experiments[[k]])))
+      }
+    } else {
+      print(cbind(seeds = iraceResults$testing$seeds,
+                  as.data.frame(experiments)))
+    }
+  }
+  ## if (verbose) print(cbind(seeds = iraceResults$testing$seeds,
+  ##                          as.data.frame(iraceResults$testing$experiments)))
   irace_note ("Finished testing\n")
   iraceResults
 }
