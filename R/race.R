@@ -57,7 +57,7 @@ print_mo_statistics <- function(Results, survivor_ids, current_task) {
 
 ## MO: Strict Pareto Dominance
 # Returns vector: TRUE if config is NOt dominated (survive)
-check_pareto_dominance <- function(results_list, which_alive, debugLevel = 0) {
+check_pareto_dominance <- function(results_list, which_alive, ids = NULL, debugLevel = 0) {
   if (length(which_alive) == 0) return(logical(0))
   n_objs <- length(results_list)
   n_alive <- length(which_alive)
@@ -81,21 +81,34 @@ check_pareto_dominance <- function(results_list, which_alive, debugLevel = 0) {
       if (all(diff <= 0) && any(diff < 0)) {
         is_dominated[i] <- TRUE
 
-        if (debugLevel >= 2) {
-           winner_id <- which_alive[j]
-           loser_id <- which_alive[i]
+        if (debugLevel >= 1) {
+          idx_winner <- which_alive[j]
+           idx_loser  <- which_alive[i]
+           
+           winner_label <- if(!is.null(ids)) ids[idx_winner] else idx_winner
+           loser_label  <- if(!is.null(ids)) ids[idx_loser] else idx_loser
+           # -----------------------------------
+
            deltas_str <- paste(sapply(diff, function(x) sprintf("%.2e", x)), collapse=", ")
            vals_winner <- paste(sapply(mean_costs[j,], function(x) sprintf("%.2e", x)), collapse=", ")
            vals_loser <- paste(sapply(mean_costs[i,], function(x) sprintf("%.2e", x)), collapse=", ")
            
            cat(sprintf("  [PARETO] Elim: ID %s (%s) domines ID %s (%s) | Diff: [%s]\n", 
-                       winner_id, vals_winner, loser_id, vals_loser, deltas_str))
+                       winner_label, vals_winner, loser_label, vals_loser, deltas_str))
+           ### winner_id <- which_alive[j]
+           ### loser_id <- which_alive[i]
+           ### deltas_str <- paste(sapply(diff, function(x) sprintf("%.2e", x)), collapse=", ")
+           ### vals_winner <- paste(sapply(mean_costs[j,], function(x) sprintf("%.2e", x)), collapse=", ")
+           ### vals_loser <- paste(sapply(mean_costs[i,], function(x) sprintf("%.2e", x)), collapse=", ")
+           
+           ### cat(sprintf("  [PARETO] Elim: ID %s (%s) domines ID %s (%s) | Diff: [%s]\n", 
+           ###             winner_id, vals_winner, loser_id, vals_loser, deltas_str))
         }
         break
       }
     }
   }
-  if (debugLevel >= 2) cat("--- [PARETO] End round. Discarted:", sum(is_dominated), "de", n_alive, "---\n")
+  if (debugLevel >= 1) cat("--- [PARETO] End round. Discarted:", sum(is_dominated), "de", n_alive, "---\n")
   return(!is_dominated) 
 }
 
@@ -1357,7 +1370,11 @@ elitist_race <- function(race_state, maxExp,
       irace_assert(sum(alive) == nb_alive)
       if (n_objs > 1) {
         current_results_list <- lapply(Results, function(m) m[seq_len(current_task), , drop=FALSE])
-        survivors_logical <- check_pareto_dominance(current_results_list, which_alive, debugLevel = scenario$debugLevel)
+        real_ids <- configurations[[".ID."]]
+        survivors_logical <- check_pareto_dominance(current_results_list, which_alive, 
+                                                    ids = real_ids, 
+                                                    debugLevel = scenario$debugLevel)
+        ### survivors_logical <- check_pareto_dominance(current_results_list, which_alive, debugLevel = scenario$debugLevel)
         test.alive <- rep(FALSE, n_configurations) 
         test.alive[which_alive] <- survivors_logical 
 
@@ -1379,7 +1396,7 @@ elitist_race <- function(race_state, maxExp,
       ## test.alive <- test_res$alive
       ## test_dropped <- nb_alive > sum(test.alive)
       ## test_done   <- TRUE
-      if (n_objs > 1 && scenario$debugLevel >= 1) {
+      if (n_objs > 2 && scenario$debugLevel >= 1) {
         print_mo_statistics(Results, which_alive[survivors_logical], current_task)
       }
     }
