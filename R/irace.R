@@ -1214,7 +1214,7 @@ irace_run <- function(scenario)
       rownames(allConfigurations) <- allConfigurations[[".ID."]]
     }
 
-    if (debugLevel >= 2L) {
+    if (debugLevel >= 1L) {
       irace_note("Configurations for the race n ", indexIteration,
                  " (elite configurations listed first, then new configurations):\n")
       configurations_print(raceConfigurations, metadata = TRUE)

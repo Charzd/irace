@@ -74,3 +74,6 @@ _snaps
 
 .idea
 *.Rproj
+
+# MO development
+/tests_MO

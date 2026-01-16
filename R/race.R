@@ -65,7 +65,8 @@ check_pareto_dominance <- function(results_list, which_alive, ids = NULL, debugL
   mean_costs <- matrix(NA_real_, nrow = n_alive, ncol = n_objs)
   for(k in 1:n_objs) {
     mat_obj <- results_list[[k]][, which_alive, drop=FALSE]
-    mean_costs[, k] <- colMeans(mat_obj, na.rm = TRUE)
+    mat_ranks <- rowRanks(mat_obj, ties.method = "average")
+    mean_costs[, k] <- colMeans(mat_ranks, na.rm = TRUE)
   }
   # is_dominated[i] is TRUE if i is dominated 
   is_dominated <- rep(FALSE, n_alive)
@@ -89,20 +90,12 @@ check_pareto_dominance <- function(results_list, which_alive, ids = NULL, debugL
            loser_label  <- if(!is.null(ids)) ids[idx_loser] else idx_loser
            # -----------------------------------
 
-           deltas_str <- paste(sapply(diff, function(x) sprintf("%.2e", x)), collapse=", ")
-           vals_winner <- paste(sapply(mean_costs[j,], function(x) sprintf("%.2e", x)), collapse=", ")
-           vals_loser <- paste(sapply(mean_costs[i,], function(x) sprintf("%.2e", x)), collapse=", ")
-           
+           deltas_str <- paste(sapply(diff, function(x) sprintf("%.2f", x)), collapse=", ")
+           vals_winner <- paste(sapply(mean_costs[j,], function(x) sprintf("%.2f", x)), collapse=", ")
+           vals_loser <- paste(sapply(mean_costs[i,], function(x) sprintf("%.2f", x)), collapse=", ")
            cat(sprintf("  [PARETO] Elim: ID %s (%s) domines ID %s (%s) | Diff: [%s]\n", 
                        winner_label, vals_winner, loser_label, vals_loser, deltas_str))
-           ### winner_id <- which_alive[j]
-           ### loser_id <- which_alive[i]
-           ### deltas_str <- paste(sapply(diff, function(x) sprintf("%.2e", x)), collapse=", ")
-           ### vals_winner <- paste(sapply(mean_costs[j,], function(x) sprintf("%.2e", x)), collapse=", ")
-           ### vals_loser <- paste(sapply(mean_costs[i,], function(x) sprintf("%.2e", x)), collapse=", ")
-           
-           ### cat(sprintf("  [PARETO] Elim: ID %s (%s) domines ID %s (%s) | Diff: [%s]\n", 
-           ###             winner_id, vals_winner, loser_id, vals_loser, deltas_str))
+
         }
         break
       }
@@ -1396,7 +1389,7 @@ elitist_race <- function(race_state, maxExp,
       ## test.alive <- test_res$alive
       ## test_dropped <- nb_alive > sum(test.alive)
       ## test_done   <- TRUE
-      if (n_objs > 2 && scenario$debugLevel >= 1) {
+      if (n_objs > 1 && scenario$debugLevel >= 1) {
         print_mo_statistics(Results, which_alive[survivors_logical], current_task)
       }
     }
