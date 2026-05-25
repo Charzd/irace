@@ -497,7 +497,7 @@ target_runner_default <- function(experiment, scenario)
 
   if (is.null(err_msg)) {
     v_output <- parse_output(output$output, verbose = (debugLevel >= 2L))
-    ## MO: Parsing MO
+    ## MO-irace: Parsing MO
     n_values <- length(v_output)
     if (n_values > 0) {
       if (n_objs > 1) {

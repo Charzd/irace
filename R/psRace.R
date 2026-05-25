@@ -110,7 +110,7 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
       # Remove rejected configurations.
       if (length(rejected_ids))
         conf_ids <- setdiff(conf_ids, rejected_ids)
-      # MO: Assume integrity between objectives
+      # MO-irace: Assume integrity between objectives
       if (is.list(experiments) && !is.data.frame(experiments)) {
           experiments_matrix <- experiments[[1]][, conf_ids, drop = FALSE]
       } else {
@@ -250,7 +250,7 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
   # Generate new instances.
   generateInstances(race_state, scenario, max_experiments / nrow(elite_configurations), update = TRUE)
   
-  # MO: Safe elite_data asignation
+  # MO-irace: Safe elite_data asignation
   n_logged <- nrow(race_state$instances_log)
   experiments_safe <- iraceResults$experiments
   if (is.list(experiments_safe) && !is.data.frame(experiments_safe)) {

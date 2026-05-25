@@ -277,7 +277,7 @@ merge_matrix_2d <- function(x, y)
   irace_assert(all(rowAnyNotNAs(z)))
   return(z)
 }
-# MO: Merge_matrix for list of matrices
+# MO-irace: Merge_matrix for list of matrices
 merge_matrix <- function(x, y)
 {
   if (is.list(x) && is.list(y) && !is.data.frame(x) && !is.data.frame(y)) {

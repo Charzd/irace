@@ -433,9 +433,24 @@ extractElites <- function(configurations, nbElites, debugLevel)
   if (debugLevel >= 2L && after < before)
     irace_note("Dropped ", before - after, " duplicated elites.\n")
 
-  after <- min(after, nbElites)
+
+  #MO-irace:
   setorderv(elites, cols=".RANK.")
+  if (nrow(elites) > nbElites && elites[[".RANK."]][1] == 1L) {
+    # Rescatamos todas las que pertenezcan al frente (rango 1)
+    after <- max(nbElites, sum(elites[[".RANK."]] == 1L))
+  } else {
+    after <- min(after, nbElites)
+  }
+  
   selected <- seq_len(after)
+
+  # Former MO-irace:
+  ## after <- min(after, nbElites)
+  ## setorderv(elites, cols=".RANK.")
+  ## selected <- seq_len(after)
+
+
   elites <- elites[selected, ]
   set(elites, j = ".WEIGHT.", value = ((after + 1L) - selected) / (after * (after + 1L) / 2))
   setDF(elites)
@@ -743,7 +758,7 @@ irace_run <- function(scenario)
     irace_version = irace_version,
     iterationElites = c(),
     allElites = list(),
-    # MO: Initialize experiments as list of k matrices
+    # MO-irace: Initialize experiments as list of k matrices
     experiments = if(n_objs > 1) {
        replicate(n_objs, matrix(nrow = 0L, ncol = 0L), simplify = FALSE)
     } else {
@@ -956,7 +971,7 @@ irace_run <- function(scenario)
     # With elitist=TRUE and without targetEvaluator we should never re-run the
     # same configuration on the same (instance,seed) pair.
     if (scenario$elitist) {
-      # MO: Adapted validation
+      # MO-irace: Adapted validation
       # We assume that if it was executed for Obj1, it will also be executed for the rest
       mat_check <- get_results_matrix(iraceResults$experiments)
       irace_assert(sum(!is.na(mat_check)) == experimentsUsed)
@@ -1069,14 +1084,38 @@ irace_run <- function(scenario)
     # happen before the first race due to the initial budget estimation.
     if (firstRace) {
       if (nbConfigurations < nrow(elite_configurations)) {
-        # FIXME-MO: Se deberia implementar otra forma de rankear
-        #Continue using ranks as SO, but only with Obj1
-        exp_data <- get_results_matrix(iraceResults$experiments)
-        eliteRanks <- overall_ranks(exp_data, test = scenario$testType)
+        # Fixed? MO-irace:
+        if (n_objs > 1) {
+          current_results_list <- lapply(iraceResults$experiments, function(m) m[seq_len(nrow_multiobj(m)), , drop=FALSE])
+          which_alive <- seq_len(nrow(elite_configurations))
+
+          survivors_logical <- check_pareto_dominance(current_results_list, which_alive)
         
-        elite_configurations <- elite_configurations[order(eliteRanks), ]
-        elite_configurations <- elite_configurations[seq_len(nbConfigurations), ]
+          if (sum(survivors_logical) > nbConfigurations) {
+            all_ranks <- sapply(seq_along(iraceResults$experiments), function(k) {
+              overall_ranks(iraceResults$experiments[[k]], test = scenario$testType)
+            })
+            avg_rank <- rowMeans(all_ranks)
+            elite_configurations <- elite_configurations[order(avg_rank), ]
+          } else {
+            elite_configurations <- elite_configurations[survivors_logical, ]
+          }
+        } else {
+          exp_data <- get_results_matrix(iraceResults$experiments)
+          eliteRanks <- overall_ranks(exp_data, test = scenario$testType)
+          elite_configurations <- elite_configurations[order(eliteRanks), ]
+        }
+        elite_configurations <- elite_configurations[seq_len(min(nrow(elite_configurations), nbConfigurations)), ]
+
+        # Former MO-irace: Order by first
+        ## exp_data <- get_results_matrix(iraceResults$experiments)
+        ## eliteRanks <- overall_ranks(exp_data, test = scenario$testType)
+        ## 
+        ## elite_configurations <- elite_configurations[order(eliteRanks), ]
+        ## elite_configurations <- elite_configurations[seq_len(nbConfigurations), ]
       }
+
+  
     # SO version:
     ## if (firstRace) {
     ##   if (nbConfigurations < nrow(elite_configurations)) {
@@ -1221,7 +1260,7 @@ irace_run <- function(scenario)
     }
 
     # Get data from previous races.
-    # MO: Elite data extraction by list of matrices
+    # MO-irace: Elite data extraction by list of matrices
     elite_data <- if (scenario$elitist && nrow(elite_configurations)) {
         ids_to_keep <- as.character(elite_configurations[[".ID."]])
         if (n_objs > 1) {

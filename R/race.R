@@ -30,7 +30,7 @@
 # ========================================================================= #
 # $Id: race.R,v 1.54 2005/03/30 12:40:42 mbiro Exp $ #
 
-# MO: Printer of pob stats
+# MO-irace:Printer of pob stats
 print_mo_statistics <- function(Results, survivor_ids, current_task) {
   if (length(survivor_ids) == 0) return()
   
@@ -55,7 +55,7 @@ print_mo_statistics <- function(Results, survivor_ids, current_task) {
   }
 }
 
-## MO: Strict Pareto Dominance
+## MO-irace:Strict Pareto Dominance
 # Returns vector: TRUE if config is NOt dominated (survive)
 check_pareto_dominance <- function(results_list, which_alive, ids = NULL, debugLevel = 0) {
   if (length(which_alive) == 0) return(logical(0))
@@ -713,7 +713,7 @@ update_is_elite <- function(is_elite, which_exe)
   is_elite
 }
 
-# MO: Adapatamos update_elite_safe. 
+# MO-irace:Adapatamos update_elite_safe. 
 update_elite_safe <- function(Results, is_elite)
 {
   elites <- is_elite > 0L
@@ -873,7 +873,7 @@ elitist_race <- function(race_state, maxExp,
   }
 
   configurations_ID <- as.character(configurations[[".ID."]])
-  # MO: Local initialization of Results
+  # MO-irace:Local initialization of Results
   n_objs <- if(is.null(scenario$n_objectives)) 1L else scenario$n_objectives
   if(n_objs > 1) {
       Results <- vector("list", n_objs)
@@ -946,7 +946,7 @@ elitist_race <- function(race_state, maxExp,
             # indices are within 1:length(which_alive). The following line converts
             # from one to the other.
             is_exe = rep_len(TRUE, n_elite), scenario = scenario)
-          #FIXME-MO: Falta revisar funcionamiento con capping
+          #FIXME-MO-irace:Falta revisar funcionamiento con capping
           capping_cost <- applyPAR(output[["cost"]], boundMax = scenario$boundMax, boundPar = scenario$boundPar)
           if (is.list(Results) && !is.data.frame(Results)) {
              if (is.list(capping_cost)) {
@@ -1047,7 +1047,7 @@ elitist_race <- function(race_state, maxExp,
           if (nb_alive == 1L) {
             best <- which_alive
           } else  {
-            # FISME-MO: Ranking usando Obj1
+            # FISME-MO-irace:Ranking usando Obj1
             tmpResults <- get_results_matrix(Results)[1L, which_alive, drop = FALSE]
             irace_assert(!anyNA(tmpResults))
             # which.min returns only the first minimum.
@@ -1148,7 +1148,7 @@ elitist_race <- function(race_state, maxExp,
         # Extract results
         irace_assert(length(output[["cost"]]) == length(which_elite_exe))
 
-        # FIXME-MO: Falta revisar capping
+        # FIXME-MO-irace:Falta revisar capping
         capping_vals <- applyPAR(output[["cost"]], boundMax = scenario$boundMax, boundPar = scenario$boundPar)
         
         if (is.list(Results) && !is.data.frame(Results)) {
@@ -1198,7 +1198,7 @@ elitist_race <- function(race_state, maxExp,
             if (nb_alive == 1L) {
               best <- which_alive
             } else  {
-              # FIXME-MO: Ranking usa clásico
+              # FIXME-MO-irace:Ranking usa clásico
               tmpResults <- get_results_matrix(Results)[1L, which_alive, drop = FALSE]
               irace_assert(!anyNA(tmpResults))
               # which.min returns only the first minimum.
@@ -1278,7 +1278,7 @@ elitist_race <- function(race_state, maxExp,
     which_has_cost <- if (is.null(scenario$targetEvaluator)) which_exe else which_alive
     irace_assert(length(output[["cost"]]) == length(which_has_cost))
 
-    # FIXME-MO: Falta revisar capping
+    # FIXME-MO-irace:Falta revisar capping
     if (n_objs > 1) {
        for(k in 1:n_objs) {
           vals <- sapply(output$cost, function(x) x[k])
@@ -1342,7 +1342,7 @@ elitist_race <- function(race_state, maxExp,
     if (capping && nb_alive > minSurvival && (current_task %% blockSize) == 0L
       && (!scenario$cappingAfterFirstTest || current_task >= firstTest)) {
       irace_assert(!any(is_elite > 0L) == (current_task >= elite_safe))
-      # FIXME-MO: Falta revisar capping
+      # FIXME-MO-irace:Falta revisar capping
       matrix_for_capping <- get_results_matrix(Results)
       cap_alive <- dom_elim(matrix_for_capping[seq_len(current_task), , drop = FALSE],
                             elites = which(is_elite > 0L),#
@@ -1435,7 +1435,7 @@ elitist_race <- function(race_state, maxExp,
       best <- prev_which_alive
     } else  {
 
-      # FIXME-MO: Ranking 
+      # FIXME-MO-irace:Ranking 
       tmpResults <- get_results_matrix(Results)[seq_len(current_task), prev_which_alive, drop = FALSE]
       ## tmpResults <- Results[seq_len(current_task), prev_which_alive, drop = FALSE]
       irace_assert(!anyNA(tmpResults))
@@ -1488,7 +1488,7 @@ elitist_race <- function(race_state, maxExp,
                eval_after = { print(Results[,alive, drop=FALSE])})
   # If we stop the loop before we see all new instances, there may be new
   # instances that have not been executed by any configuration.
-  # MO: empty rows cleaning
+  # MO-irace:empty rows cleaning
   na_status_alive <- is_na_multiobj(Results, cols=which(alive))
   valid_rows <- rowSums(na_status_alive) == 0
   if (!any(valid_rows)) {
@@ -1522,16 +1522,28 @@ elitist_race <- function(race_state, maxExp,
   ## }
 
 
-  # FIXME-MO: Ranking final
-  matrix_for_ranks <- get_results_matrix(Results)
-  race_ranks <- overall_ranks(matrix_for_ranks[, alive, drop = FALSE], test = stat_test)
+  # FIXME-MO-irace: Ranking final 
+  matrix_for_ranks <- get_results_matrix(Results) 
+  
+  if (n_objs > 1) {
+    current_results_list <- lapply(Results, function(m) m[, alive, drop=FALSE])
+    which_alive_tmp <- seq_len(sum(alive))
+    
+    is_non_dominated <- check_pareto_dominance(current_results_list, which_alive_tmp)
+    race_ranks <- rep(2L, sum(alive))
+    race_ranks[is_non_dominated] <- 1L
+  } else {
+    race_ranks <- overall_ranks(matrix_for_ranks[, alive, drop = FALSE], test = stat_test)
+  }
+
+  # SO-irace
   ## race_ranks <- overall_ranks(Results[, alive, drop = FALSE], test = stat_test)
 
   if (!scenario$quiet) {
     old_best <- best # old_best could be NA.
     best <- which_alive[which.min(race_ranks)]
 
-    # FIXME-MO: Media calculada solo con obj1
+    # FIXME-MO-irace:Media calculada solo con obj1
     mean_best <- mean(matrix_for_ranks[, best])
     ## mean_best <- mean(Results[, best])
     print_footer(bestconf = configurations[best, , drop = FALSE],
