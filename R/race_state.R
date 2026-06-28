@@ -6,6 +6,8 @@ RaceState <- R6Class("RaceState", lock_class = TRUE,
    elapsed = 0L,
    elapsed_recovered = 0L,
    elitist_new_instances = 0L,
+   global_archive = NULL, # NEW-ArchiveMO
+   global_costs = NULL,   # NEW-ArchiveMO
    experiment_log = NULL,
    instances_log = NULL,
    minSurvival = NULL,
@@ -57,6 +59,8 @@ RaceState <- R6Class("RaceState", lock_class = TRUE,
          self$rejected_ids = NULL
          self$timeUsed = 0
          self$time_next_save = 0
+         self$global_archive = NULL # NEW-ArchiveMO
+         self$global_costs = NULL   # NEW-ArchiveMO
          # Just in case anything is still running.
          self$stop_parallel()
        } else {

@@ -168,7 +168,16 @@ testing_fromlog <- function(logFile, testNbElites, testIterationElites,
     testing_id <- sapply(iraceResults$allElites,
                          function(x) x[seq_len(min(length(x), scenario$testNbElites))])
   else {
-    tmp <- iraceResults$allElites[[length(iraceResults$allElites)]]
+
+    # NEW-ArchiveMO -------------------------------------------
+    if (!is.null(iraceResults$global_archive)) {
+      tmp <- iraceResults$global_archive[[".ID."]]
+    } else {
+      tmp <- iraceResults$allElites[[length(iraceResults$allElites)]]
+    }
+    # ---------------------------------------------------------
+
+    # tmp <- iraceResults$allElites[[length(iraceResults$allElites)]] # Pre-NEW
     testing_id <- tmp[seq_len(min(length(tmp), scenario$testNbElites))]
   }
   testing_id <- unique.default(unlist(testing_id))

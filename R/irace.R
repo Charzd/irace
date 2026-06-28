@@ -437,7 +437,6 @@ extractElites <- function(configurations, nbElites, debugLevel)
   #MO-irace:
   setorderv(elites, cols=".RANK.")
   if (nrow(elites) > nbElites && elites[[".RANK."]][1] == 1L) {
-    # Rescatamos todas las que pertenezcan al frente (rango 1)
     after <- max(nbElites, sum(elites[[".RANK."]] == 1L))
   } else {
     after <- min(after, nbElites)
@@ -683,16 +682,49 @@ irace_run <- function(scenario)
           ", Wall-clock time: ", elapsed["wallclock"], "\n", sep="")
     # FIXME: Do we need to clone?
     race_state$completed <- reason
+
+
     iraceResults$state <- race_state
-    save_irace_logfile(iraceResults, logfile = scenario$logFile)
-    # FIXME: Handle scenario$maxTime > 0
+    #save_irace_logfile(iraceResults, logfile = scenario$logFile) # Pre-NEW
+    
 
     final_elites <- NULL
     if (scenario$postselection && scenario$maxTime == 0 && floor(remainingBudget / max(scenario$blockSize, scenario$eachTest)) > 1L){
       final_elites <- psRace(iraceResults, max_experiments = remainingBudget, iteration_elites = TRUE)
     } else {
-      final_elites <- elite_configurations
+
+      # NEW-ArchiveMO --------------------------------------------------------
+      archive <- race_state$global_archive
+      costs <- race_state$global_costs
+      
+      if (!is.null(archive) && nrow(archive) > 0 && !is.null(costs)) {
+        costs_rounded <- round(costs, digits = 4)
+        is_dup <- duplicated(costs_rounded)
+        
+        if (any(is_dup) && !scenario$quiet) {
+          cat("\n# Eliminating", sum(is_dup), "duplicated configurations from Pareto Front...\n")
+        }
+        
+        archive <- archive[!is_dup, , drop = FALSE]
+        costs <- costs[!is_dup, , drop = FALSE]
+        
+        race_state$global_archive <- archive
+        race_state$global_costs <- costs
+      }
+      final_elites <- if (!is.null(archive) && nrow(archive) > 0) archive else elite_configurations
+      # -----------------------------------------------------------------------
+      #final_elites <- elite_configurations #Pre-NEW
     }
+
+    # NEW-ArchiveMO --------------------------------------------------------
+    iraceResults$global_archive <- race_state$global_archive
+    iraceResults$global_costs <- race_state$global_costs
+    
+    iraceResults$state <- race_state
+    save_irace_logfile(iraceResults, logfile = scenario$logFile)
+    # -----------------------------------------------------------------------
+
+    # FIXME: Handle scenario$maxTime > 0
 
     if (!scenario$quiet && !is.null(final_elites)) {
       
@@ -1253,6 +1285,23 @@ irace_run <- function(scenario)
       rownames(allConfigurations) <- allConfigurations[[".ID."]]
     }
 
+    # NEW-ArchiveMO ------------------------------------------
+    if (!is.null(race_state$global_archive) && nrow(race_state$global_archive) > 0) {
+      ids_in_race <- raceConfigurations[[".ID."]]
+      archive_to_inject <- race_state$global_archive[!(race_state$global_archive[[".ID."]] %in% ids_in_race), , drop = FALSE]
+      
+      if (nrow(archive_to_inject) > 0) {
+        if (debugLevel >= 1L) {
+          irace_note("Injecting ", nrow(archive_to_inject), 
+                     " configuration(s) from the global Pareto archive into the race.\n")
+        }
+        archive_to_inject <- archive_to_inject[, colnames(raceConfigurations), drop = FALSE]
+        raceConfigurations <- rbind(archive_to_inject, raceConfigurations)
+        rownames(raceConfigurations) <- as.character(raceConfigurations[[".ID."]])
+      }
+    }
+    # ------------------------------------------------------
+
     if (debugLevel >= 1L) {
       irace_note("Configurations for the race n ", indexIteration,
                  " (elite configurations listed first, then new configurations):\n")
@@ -1263,12 +1312,21 @@ irace_run <- function(scenario)
     # MO-irace: Elite data extraction by list of matrices
     elite_data <- if (scenario$elitist && nrow(elite_configurations)) {
         ids_to_keep <- as.character(elite_configurations[[".ID."]])
+
+        # NEW-ArchiveMO --------------------------------------------------------
+        if (!is.null(race_state$global_archive)) {
+            archive_ids <- as.character(race_state$global_archive[[".ID."]])
+            ids_to_keep <- unique(c(ids_to_keep, archive_ids))
+        }
+        # ----------------------------------------------------------------------
+
         if (n_objs > 1) {
              lapply(iraceResults$experiments, function(m) m[, ids_to_keep, drop=FALSE])
         } else {
              iraceResults$experiments[, ids_to_keep, drop=FALSE]
         }
     } else NULL
+
     # SO version:
     ## elite_data <- if (scenario$elitist && nrow(elite_configurations))
     ##                 iraceResults$experiments[, as.character(elite_configurations[[".ID."]]), drop=FALSE]
@@ -1332,6 +1390,33 @@ irace_run <- function(scenario)
     if (!quiet) configurations_print(elite_configurations, metadata = debugLevel >= 1L)
     iraceResults$iterationElites[indexIteration] <- elite_configurations[[".ID."]][1L]
     iraceResults$allElites[[indexIteration]] <- elite_configurations[[".ID."]]
+
+    # NEW-ArchiveMO ------------------------------------------
+    archive_limit <- if (is.null(scenario$paretoArchiveSize)) 100L else scenario$paretoArchiveSize
+    current_front <- elite_configurations
+
+    if (archive_limit > 0 && nrow(current_front) > archive_limit) {
+      if (debugLevel >= 1L) irace_note("Truncating Pareto archive from ", nrow(current_front), " to ", archive_limit, ".\n")
+      current_front <- current_front[seq_len(archive_limit), , drop = FALSE]
+    }
+    
+    race_state$global_archive <- current_front
+    
+    ids_front <- as.character(current_front[[".ID."]])
+    costs_df <- data.frame(row.names = ids_front)
+    
+    if (n_objs > 1) {
+      for (k in seq_along(iraceResults$experiments)) {
+        mat_obj <- iraceResults$experiments[[k]]
+        valid_ids <- intersect(ids_front, colnames(mat_obj))
+        if (length(valid_ids) > 0) {
+          sub_mat <- mat_obj[, valid_ids, drop = FALSE]
+          costs_df[valid_ids, paste0("Objective_", k)] <- colMeans(sub_mat, na.rm = TRUE) 
+        }
+      }
+    }
+    race_state$global_costs <- costs_df
+    # ---------------------------------------------------------------
 
     if (firstRace) {
       if (debugLevel >= 1L) irace_note("Initialise model\n")
