@@ -652,6 +652,7 @@ irace_common <- function(scenario, simple, output.width = 9999L)
 irace_run <- function(scenario)
 {
   # Recover state from file?
+  cat("\n[DEBUG MO-IRACE] Iniciando irace_run MODIFICADO con Archivo Global\n")
   if (is.null.or.empty(scenario$recoveryFile)) {
     race_state <- RaceState$new(scenario)
   } else {
@@ -695,26 +696,77 @@ irace_run <- function(scenario)
 
       # NEW-ArchiveMO --------------------------------------------------------
       archive <- race_state$global_archive
-      costs <- race_state$global_costs
-      
-      if (!is.null(archive) && nrow(archive) > 0 && !is.null(costs)) {
-        costs_rounded <- round(costs, digits = 4)
+      final_elites <- if (!is.null(archive) && nrow(archive) > 0) archive else elite_configurations
+    }
+
+    costs_df <- NULL
+    is_multiobjective <- FALSE
+
+    if (!is.null(final_elites) && nrow(final_elites) > 0) {
+      experiments <- iraceResults$experiments
+      is_multiobjective <- is.list(experiments) && !is.data.frame(experiments)
+      elite_ids <- as.character(final_elites[[".ID."]])
+      costs_df <- data.frame(row.names = elite_ids)
+
+      if (is_multiobjective) {
+        for (k in seq_along(experiments)) {
+          mat_obj <- experiments[[k]]
+          valid_ids <- intersect(elite_ids, colnames(mat_obj))
+          if (length(valid_ids) > 0) {
+            sub_mat <- mat_obj[, valid_ids, drop = FALSE]
+            costs_df[valid_ids, paste0("Objective_", k)] <- colMeans(sub_mat, na.rm = TRUE)
+          }
+        }
+      } else {
+        valid_ids <- intersect(elite_ids, colnames(experiments))
+        if (length(valid_ids) > 0) {
+          sub_mat <- experiments[, valid_ids, drop = FALSE]
+          costs_df[valid_ids, "Cost"] <- colMeans(sub_mat, na.rm = TRUE)
+        }
+      }
+
+      if (nrow(costs_df) > 0) {
+        costs_rounded <- round(costs_df, digits = 4)
         is_dup <- duplicated(costs_rounded)
         
-        if (any(is_dup) && !scenario$quiet) {
-          cat("\n# Eliminating", sum(is_dup), "duplicated configurations from Pareto Front...\n")
+        if (any(is_dup)) {
+          if (!scenario$quiet) {
+            cat(sprintf("\n# Eliminating %d duplicated configurations from final output...\n", sum(is_dup)))
+          }
+          
+          final_elites <- final_elites[!is_dup, , drop = FALSE]
+          costs_df <- costs_df[!is_dup, , drop = FALSE]
+
+          last_iter <- length(iraceResults$allElites)
+          if (last_iter > 0) {
+            iraceResults$allElites[[last_iter]] <- final_elites[[".ID."]]
+          }
+        } else {
+          if (!scenario$quiet) {
+            cat("\n# Verificación: 0 duplicated configurations found in the Pareto Front. All unique.\n")
+          }
         }
-        
-        archive <- archive[!is_dup, , drop = FALSE]
-        costs <- costs[!is_dup, , drop = FALSE]
-        
-        race_state$global_archive <- archive
-        race_state$global_costs <- costs
       }
-      final_elites <- if (!is.null(archive) && nrow(archive) > 0) archive else elite_configurations
-      # -----------------------------------------------------------------------
-      #final_elites <- elite_configurations #Pre-NEW
     }
+      
+    #####  if (!is.null(archive) && nrow(archive) > 0 && !is.null(costs)) {
+    #####    costs_rounded <- round(costs, digits = 4)
+    #####    is_dup <- duplicated(costs_rounded)
+    #####    
+    #####    if (any(is_dup) && !scenario$quiet) {
+    #####      cat("\n# Eliminating", sum(is_dup), "duplicated configurations from Pareto Front...\n")
+    #####    }
+    #####    
+    #####    archive <- archive[!is_dup, , drop = FALSE]
+    #####    costs <- costs[!is_dup, , drop = FALSE]
+    #####    
+    #####    race_state$global_archive <- archive
+    #####    race_state$global_costs <- costs
+    #####  }
+    #####  final_elites <- if (!is.null(archive) && nrow(archive) > 0) archive else elite_configurations
+    #####  # -----------------------------------------------------------------------
+    #####  #final_elites <- elite_configurations #Pre-NEW
+    
 
     # NEW-ArchiveMO --------------------------------------------------------
     iraceResults$global_archive <- race_state$global_archive
@@ -728,8 +780,8 @@ irace_run <- function(scenario)
 
     if (!scenario$quiet && !is.null(final_elites)) {
       
-      experiments <- iraceResults$experiments
-      is_multiobjective <- is.list(experiments) && !is.data.frame(experiments)
+      ## experiments <- iraceResults$experiments
+      ## is_multiobjective <- is.list(experiments) && !is.data.frame(experiments)
       
       cat("\n# ------------------------------------------------------------------\n")
       if (is_multiobjective) {
@@ -742,29 +794,33 @@ irace_run <- function(scenario)
       cat("\n")
       cat("# Mean Objective Values for these configurations:\n")
       
-      elite_ids <- as.character(final_elites[[".ID."]])
-      costs_df <- data.frame(row.names = elite_ids)
-      
-      if (is_multiobjective) {
-        for (k in seq_along(experiments)) {
-          mat_obj <- experiments[[k]]
-          valid_ids <- intersect(elite_ids, colnames(mat_obj))
-          
-          if (length(valid_ids) > 0) {
-            sub_mat <- mat_obj[, valid_ids, drop = FALSE]
-            means <- colMeans(sub_mat, na.rm = TRUE)
-            costs_df[valid_ids, paste0("Objective ", k)] <- means
-          }
-        }
-      } else {
-        valid_ids <- intersect(elite_ids, colnames(experiments))
-        if (length(valid_ids) > 0) {
-          sub_mat <- experiments[, valid_ids, drop = FALSE]
-          means <- colMeans(sub_mat, na.rm = TRUE)
-          costs_df[valid_ids, "Cost"] <- means
-        }
+      #### elite_ids <- as.character(final_elites[[".ID."]])
+      #### costs_df <- data.frame(row.names = elite_ids)
+      #### 
+      #### if (is_multiobjective) {
+      ####   for (k in seq_along(experiments)) {
+      ####     mat_obj <- experiments[[k]]
+      ####     valid_ids <- intersect(elite_ids, colnames(mat_obj))
+      ####     
+      ####     if (length(valid_ids) > 0) {
+      ####       sub_mat <- mat_obj[, valid_ids, drop = FALSE]
+      ####       means <- colMeans(sub_mat, na.rm = TRUE)
+      ####       costs_df[valid_ids, paste0("Objective ", k)] <- means
+      ####     }
+      ####   }
+      #### } else {
+      ####   valid_ids <- intersect(elite_ids, colnames(experiments))
+      ####   if (length(valid_ids) > 0) {
+      ####     sub_mat <- experiments[, valid_ids, drop = FALSE]
+      ####     means <- colMeans(sub_mat, na.rm = TRUE)
+      ####     costs_df[valid_ids, "Cost"] <- means
+      ####   }
+      #### }
+      #### print(costs_df)
+
+      if (!is.null(costs_df)) {
+        print(costs_df)
       }
-      print(costs_df)
       cat("# ------------------------------------------------------------------\n")
     }
     
