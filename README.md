@@ -1,4 +1,4 @@
-**irace**: Iterated Racing for Automatic Algorithm Configuration
+**MO-irace**: MO-irace: Multi-Objective Iterated Racing for Automatic Algorithm Configuration
 ================================================================
 
 <!-- badges: start -->
@@ -14,11 +14,11 @@ status](https://github.com/MLopez-Ibanez/irace/workflows/R-CMD-check/badge.svg)]
 
 [ [**Homepage**][irace-homepage] ] [ [**User Guide (PDF)**][user-guide] ] [ [**Tutorial**](https://lopez-ibanez.eu/2024-redheur/) ]
 
-**Maintainers:** [Manuel López-Ibáñez](https://lopez-ibanez.eu/), Leslie Pérez Cáceres
+**MO-irace Extension by:** Carlos Bracamonte-Espinoza, Nicolas Rojas-Morales
 
-**Creators:** [Manuel López-Ibáñez](https://lopez-ibanez.eu/), Jérémie Dubois-Lacoste
-
-**Contributors:** Jérémie Dubois-Lacoste, Thomas Stützle, Mauro Birattari, Eric
+**Original irace Maintainers:** Manuel López-Ibáñez, Leslie Pérez Cáceres
+**Original irace Creators:** Manuel López-Ibáñez, Jérémie Dubois-Lacoste
+**Original irace Contributors:** Jérémie Dubois-Lacoste, Thomas Stützle, Mauro Birattari, Eric
   Yuan and Prasanna Balaprakash.
 
 **Contact:** <https://groups.google.com/d/forum/irace-package>
@@ -28,15 +28,16 @@ status](https://github.com/MLopez-Ibanez/irace/workflows/R-CMD-check/badge.svg)]
 Introduction
 ------------
 
-The **irace** package implements the Iterated Race method, which is a
-generalization of the Iterated F-race method for the automatic configuration of
-optimization algorithms, that is, the tuning of their parameters by finding the
-most appropriate settings given a set of instances of an optimization problem.
-It builds upon the race package by Birattari and it is implemented in R.
+The **MO-irace** package implements the Multi-Objective Iterated Race method, a powerful extension of 
+the standard irace method for the automatic configuration of optimization algorithms. 
+While the original irace configurator focuses on single-objective optimization, MO-irace introduces 
+the ability to tune parameters considering multiple conflicting objectives simultaneously.
+It is built upon the established architecture of the original irace implemented in R.
+
 
 You may also find the [**iraceplot**](https://auto-optimization.github.io/iraceplot/) package useful for analyzing the output of irace.
 
-**Keywords:** automatic configuration, offline tuning, parameter tuning, racing, F-race.
+**Keywords:** multi-objective automatic configuration, offline tuning, parameter tuning, racing, Pareto front, irace.
 
 **Relevant literature:**
 
@@ -95,6 +96,10 @@ Consider adding this line to your `~/.bashrc`, `~/.zshrc`, or `~/.profile` for i
 ```bash
     Rscript -e "vignette('irace-package')"
 ```
+
+Installing MO-irace
+-----------
+Since MO-irace is currently in development, you can install it directly from this GitHub repository by downloading it and running the "make quick-install" command from the irace directory.
 
 Installing R
 ------------
@@ -272,6 +277,13 @@ Usage
     * In `scenario.txt`, uncomment and assign only the parameters for which
       you need a value different than the default one. For example, you may need to set
       `trainInstancesDir="./Instances/"`.
+
+**MO-irace modifications:**
+    * In `scenario.txt`, define the number of objectives your problem has using the 
+    `n_objectives` parameter (e.g., `n_objectives = 2`). 
+    If left undefined, MO-irace will default to 1 (acting as standard irace).
+    * The `target-runner` requires to output multiple space-separated cost values 
+    corresponding to the number of objectives defined (e.g., `cost_obj1 cost_obj2`). 
 
     There are examples in `$IRACE_HOME/examples/`.
 
