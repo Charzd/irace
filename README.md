@@ -14,7 +14,7 @@ status](https://github.com/MLopez-Ibanez/irace/workflows/R-CMD-check/badge.svg)]
 
 [ [**Homepage**][irace-homepage] ] [ [**User Guide (PDF)**][user-guide] ] [ [**Tutorial**](https://lopez-ibanez.eu/2024-redheur/) ]
 
-**MO-irace Extension by:** Carlos Bracamonte-Espinoza, Nicolas Rojas-Morales
+**MO-irace Extension by:** Carlos Bracamonte-Espinoza, Nicolas Rojas-Morales, Carlos Hernandez, Diana Gil-Silvestre
 
 **Original irace Maintainers:** Manuel López-Ibáñez, Leslie Pérez Cáceres
 **Original irace Creators:** Manuel López-Ibáñez, Jérémie Dubois-Lacoste
