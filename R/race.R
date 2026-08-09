@@ -1047,7 +1047,7 @@ elitist_race <- function(race_state, maxExp,
           if (nb_alive == 1L) {
             best <- which_alive
           } else  {
-            # FISME-MO-irace:Ranking usando Obj1
+            # FIXME-MO-irace:Ranking usando Obj1
             tmpResults <- get_results_matrix(Results)[1L, which_alive, drop = FALSE]
             irace_assert(!anyNA(tmpResults))
             # which.min returns only the first minimum.

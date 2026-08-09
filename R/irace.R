@@ -434,7 +434,7 @@ extractElites <- function(configurations, nbElites, debugLevel)
     irace_note("Dropped ", before - after, " duplicated elites.\n")
 
 
-  #MO-irace:
+  #MO-irace non-pruning elite:
   ## setorderv(elites, cols=".RANK.")
   ## if (nrow(elites) > nbElites && elites[[".RANK."]][1] == 1L) {
   ##   after <- max(nbElites, sum(elites[[".RANK."]] == 1L))
@@ -445,9 +445,24 @@ extractElites <- function(configurations, nbElites, debugLevel)
   ## selected <- seq_len(after)
 
   # Former MO-irace:
+  ## setorderv(elites, cols=".RANK.")
+  ## after <- min(after, nbElites)
+  ## selected <- seq_len(after)
+
+  # NEW-ArchiveMO --------------------------------------------------
+  random_idx <- sample.int(nrow(elites))
+  elites <- elites[random_idx, ]
+  
   setorderv(elites, cols=".RANK.")
-  after <- min(after, nbElites)
+  after <- min(nrow(elites), nbElites)
+  
+  if (debugLevel >= 1L) {
+     cat(sprintf("[DEBUG MO-IRACE] extractElites: Shuffled %d survivors, extracting top %d for sampling.\n", 
+                 nrow(elites), after))
+  }
   selected <- seq_len(after)
+  # ----------------------------------------------------------------
+
 
 
   elites <- elites[selected, ]
@@ -726,26 +741,37 @@ irace_run <- function(scenario)
       }
 
       if (nrow(costs_df) > 0) {
-        costs_rounded <- round(costs_df, digits = 4)
-        is_dup <- duplicated(costs_rounded)
-        
-        if (any(is_dup)) {
-          if (!scenario$quiet) {
-            cat(sprintf("\n# Eliminating %d duplicated configurations from final output...\n", sum(is_dup)))
-          }
-          
-          final_elites <- final_elites[!is_dup, , drop = FALSE]
-          costs_df <- costs_df[!is_dup, , drop = FALSE]
 
-          last_iter <- length(iraceResults$allElites)
-          if (last_iter > 0) {
-            iraceResults$allElites[[last_iter]] <- final_elites[[".ID."]]
-          }
-        } else {
-          if (!scenario$quiet) {
-            cat("\n# Verificación: 0 duplicated configurations found in the Pareto Front. All unique.\n")
+        if (FALSE) { # Plan 1: Duplicated configurations to eliminate
+
+          costs_rounded <- round(costs_df, digits = 4)
+          is_dup <- duplicated(costs_rounded)
+          
+          if (any(is_dup)) {
+            if (!scenario$quiet) {
+              cat(sprintf("\n# Eliminating %d duplicated configurations from final output...\n", sum(is_dup)))
+            }
+            
+            final_elites <- final_elites[!is_dup, , drop = FALSE]
+            costs_df <- costs_df[!is_dup, , drop = FALSE]
+
+            last_iter <- length(iraceResults$allElites)
+            if (last_iter > 0) {
+              iraceResults$allElites[[last_iter]] <- final_elites[[".ID."]]
+            }
+          } else {
+            if (!scenario$quiet) {
+              cat("\n# Debug: 0 duplicated configurations found in the Pareto Front. All unique.\n")
+            }
           }
         }
+        
+
+        ########## Duplicate elimination off
+        if (!scenario$quiet) {
+          cat("\n# Debug: Duplicate-filter Off.\n")
+        }
+        ##################
       }
     }
       
@@ -1492,8 +1518,27 @@ irace_run <- function(scenario)
     # ---------------------------------------------------------------
 
     if (debugLevel >= 1L) irace_note("Extracting elites for sampling model\n")
+    # NEW-ArchiveMO ------------------------------------------
+    e_min <- minSurvival
+    e_max <- if (!is.null(scenario$moElitesMax)) scenario$moElitesMax else 30L
+    
+    if (nbIterations > 1L) {
+      e_dinamico <- max(e_min, floor(e_max - (e_max - e_min) * ((indexIteration - 1L) / (nbIterations - 1L))))
+    } else {
+      e_dinamico <- e_max
+    }
+    
+    if (!scenario$quiet) {
+      cat(sprintf("\n[DEBUG MO-IRACE] Dynamic Elite Size for iteration %d: %d (Min: %d, Max: %d)\n", 
+                  indexIteration, e_dinamico, e_min, e_max))
+    }
+    
     elite_configurations <- extractElites(raceResults$configurations,
-      nbElites = minSurvival, debugLevel = scenario$debugLevel)
+      nbElites = e_dinamico, debugLevel = scenario$debugLevel)
+    # --------------------------------------------------------
+
+    ### elite_configurations <- extractElites(raceResults$configurations,
+    ###   nbElites = minSurvival, debugLevel = scenario$debugLevel)
     irace_note("Elite configurations (first number is the configuration ID;",
                " listed from best to worst according to the ",
                test.type.order.str(scenario$testType), "):\n")
