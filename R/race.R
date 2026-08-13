@@ -772,6 +772,18 @@ elitist_race <- function(race_state, maxExp,
   elitist <- scenario$elitist
   capping <- scenario$capping
   n_configurations <- nrow(configurations)
+  # --- MO-irace V2 ---
+  archive_budget_pct <- if (!is.null(scenario$archiveBudgetPercent)) scenario$archiveBudgetPercent else 0.10
+  race_max_experiments <- maxExp * (1.0 - archive_budget_pct)
+
+  if (scenario$debugLevel >= 1L) {
+    irace_note("\n--- MO-irace V2 DEBUG ---\n")
+    irace_note("Total Budget (maxExp) for this race: ", maxExp, "\n")
+    irace_note("Archive Reserve (%): ", archive_budget_pct * 100, "%\n")
+    irace_note("Effective Race Limit: ", round(race_max_experiments), "\n")
+    irace_note("-------------------------\n")
+  }
+  # ------------------------------------------
   alive <- rep_len(TRUE, n_configurations)
   is_rejected <- logical(n_configurations)
 
@@ -1096,10 +1108,19 @@ elitist_race <- function(race_state, maxExp,
       # FIXME: In post-selection racing, we want to consume all budget, so we
       # should discard configurations until we have 2.
       if (current_task > firstTest && ( (current_task - 1L) %% eachTest) == 0L
-        && experiments_used + length(which_exe) * eachTest > maxExp) {
+        && experiments_used + length(which_exe) * eachTest > race_max_experiments) {
+        # && experiments_used + length(which_exe) * eachTest > maxExp) { # SO-irace
         break_msg <- paste0("experiments for next test (",
           experiments_used + length(which_exe) * eachTest,
-          ") > max experiments (", maxExp, ")")
+          # ") > max experiments (", maxExp, ")") # SO-irace
+          ") > race max experiments (", round(race_max_experiments), "). Saving remaining budget for Archive phase.")
+          
+          if (scenario$debugLevel >= 1L) {
+          irace_note("\n--- MO-irace V2 DEBUG: RACE STOPPED EARLY ---\n")
+          irace_note(break_msg, "\n")
+          irace_note("Budget usage: ", experiments_used, " | Reserved left for Archive: ", maxExp - experiments_used, "\n")
+          irace_note("---------------------------------------------\n")
+        }
         break
       }
 

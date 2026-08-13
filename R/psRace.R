@@ -287,6 +287,15 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
   # FIXME: elitist_race should not require setting this, but it currently does.
   scenario$elitist <- TRUE
 
+  # --- MO-irace V2 ---
+  # Post-selection race does not feed the archive, it uses the 100%
+  scenario$archiveBudgetPercent <- 0.0
+
+  if (scenario$debugLevel >= 1L) {
+    irace_note("\n--- MO-irace V2 DEBUG: Post-Selection Race (100% Budget) ---\n")
+  }
+  # -------------------
+
   n_rows_elite <- if(is.list(elite_data) && !is.data.frame(elite_data))
                      nrow(elite_data[[1]]) else nrow(elite_data)
 

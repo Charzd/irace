@@ -488,6 +488,26 @@ checkScenario <- function(scenario = defaultScenario())
                 " cannot be enabled at the same time.")
   }
 
+  # --- MO-irace ---
+  if (!is.null(scenario$n_objectives)) {
+    if (scenario$n_objectives < 2 || scenario$n_objectives %% 1 != 0) {
+      irace_error(quote.param("n_objectives"), " must be an integer >= 2.")
+    }
+  }
+
+  # --- MO-irace V2 ---
+  if (scenario$archiveBudgetPercent < 0 || scenario$archiveBudgetPercent >= 1) {
+    irace_error(quote.param("archiveBudgetPercent"), " must be within [0,1).")
+  }
+
+  if (scenario$bootstrapCount < 1 || scenario$bootstrapCount %% 1 != 0) {
+    irace_error(quote.param("bootstrapCount"), " must be an integer >= 1.")
+  }
+
+  if (scenario$bootstrapAlpha <= 0 || scenario$bootstrapAlpha > 1) {
+    irace_error(quote.param("bootstrapAlpha"), " must be within (0,1].")
+  }
+  # --------------------------------
   if (is_null_or_empty_or_na(scenario$testType)) {
     if (scenario$capping) scenario$testType <- "t-test"
     else scenario$testType <- "f-test"
