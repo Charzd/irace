@@ -739,7 +739,7 @@ subset_results_rows <- function(results, valid_rows) {
 
 # --- MO-irace V2 ---
 # Pareto Dominance with Bootstrapping
-bootstrap_pareto_dominance <- function(results_list, which_alive, boot_n = 500L, alpha = 0.90, debugLevel = 0L) {
+bootstrap_pareto_dominance <- function(results_list, which_alive, boot_n = 500L, alpha = 0.60, debugLevel = 0L) {
   n_alive <- length(which_alive)
   if (n_alive <= 1) return(rep(FALSE, n_alive))
   

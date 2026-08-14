@@ -55,7 +55,7 @@
 "0", "0", "", "", "", "0", "0", NA, "0", "0.05", "0.01", "0",
 "1", "0", "0", "0", "0", NA, "1", "1e-04", "1", "1", "2", "",
 NA, "0", "median", "candidate", "0", "0", "1", "1", "1", "0",
-"0", "0", "0", "0", "5", "0.95", "1", "0.10", "500", "0.90"), domain = c(NA, NA, NA, NA,
+"0", "0", "0", "0", "5", "0.95", "1", "0.10", "500", "0.60"), domain = c(NA, NA, NA, NA,
 NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,
 NA, NA, "F-test,t-test,t-test-holm,t-test-bonferroni", NA, NA,
 NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,
