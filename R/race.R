@@ -121,7 +121,7 @@ check_pareto_dominance_V1 <- function(results_list, which_alive, ids = NULL, deb
   return(!is_dominated) 
 }
 
-check_pareto_dominance_V2 <- function(results_list, which_alive, boot_n = 500L, alpha = 0.90, debugLevel = 0L) {
+check_pareto_dominance_V2 <- function(results_list, which_alive, boot_n = 500L, alpha = 0.60, debugLevel = 0L) {
   bootstrap_pareto_dominance(
     results_list = results_list,
     which_alive = which_alive,
@@ -1414,7 +1414,7 @@ elitist_race <- function(race_state, maxExp,
 
         # --- MO-irace V2 ---
         boot_n <- if (!is.null(scenario$bootstrapCount)) scenario$bootstrapCount else 500L
-        boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.90
+        boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.60
         
         survivors_logical <- check_pareto_dominance_V2(
           results_list = current_results_list, 
@@ -1590,7 +1590,7 @@ elitist_race <- function(race_state, maxExp,
 
     # --- MO-irace V2 ---
     boot_n <- if (!is.null(scenario$bootstrapCount)) scenario$bootstrapCount else 500L
-    boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.90
+    boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.60
     
     is_non_dominated <- check_pareto_dominance_V2(
       results_list = current_results_list, 

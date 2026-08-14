@@ -1445,75 +1445,215 @@ irace_run <- function(scenario)
       configurations_print(raceResults$configurations, metadata = TRUE)
     }
 
-    # NEW-ArchiveMO v2------------------------------------------
+    # NEW-ArchiveMO V2------------------------------------------
     current_front <- raceResults$configurations[raceResults$configurations[[".RANK."]] == 1L, , drop = FALSE]
-    
-    if (!scenario$quiet) {
-      cat(sprintf("\n[DEBUG MO-IRACE] Keeping %d non-dom configurations from iteration %d.\n", nrow(current_front), indexIteration))
-    }
 
-    ids_new <- as.character(current_front[[".ID."]])
-    costs_new <- data.frame(row.names = ids_new)
-    if (n_objs > 1) {
+    if (is.null(race_state$global_archive) || nrow(race_state$global_archive) == 0) {
+      # Archive initialization
+      race_state$global_archive <- current_front
+
+      ids_init <- as.character(current_front[[".ID."]])
+      costs_init <- data.frame(row.names = ids_init)
       for (k in seq_along(iraceResults$experiments)) {
-        mat_obj <- iraceResults$experiments[[k]]
-        valid_ids <- intersect(ids_new, colnames(mat_obj))
-        if (length(valid_ids) > 0) {
-          sub_mat <- mat_obj[, valid_ids, drop = FALSE]
-          costs_new[valid_ids, paste0("Objective_", k)] <- colMeans(sub_mat, na.rm = TRUE) 
+        sub_mat <- iraceResults$experiments[[k]][, ids_init, drop = FALSE]
+        costs_init[ids_init, paste0("Objective_", k)] <- colMeans(sub_mat, na.rm = TRUE)
+      }
+      race_state$global_costs <- costs_init
+      
+      if (!scenario$quiet) {
+        cat(sprintf("\n[DEBUG MO-IRACE V2] Archive initializated with %d configurations.\n\n", nrow(current_front)))
+      }
+      
+    } else {
+      # Next iterations: 2-phase process (Intersection + Leveling)
+      
+      combined_archive <- rbind(race_state$global_archive, current_front)
+      combined_archive <- unique(combined_archive, by = ".ID.")
+      all_ids <- as.character(combined_archive[[".ID."]])
+      
+      # Matriz to search NAs
+      boot_n <- if (!is.null(scenario$bootstrapCount)) scenario$bootstrapCount else 500L
+      boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.60
+      
+      mat_exp1 <- iraceResults$experiments[[1]]
+
+      cat("\n=============================================\n")
+      cat("[DEBUG MO-IRACE] PHASE 1: INTERSECTION\n")
+      cat("=============================================\n")
+      cat("Current matrix global dimension:", nrow(mat_exp1), "instances x", ncol(mat_exp1), "historical configurations.\n")
+      
+      # PHASE 1: Intersection
+      is_dominated_phase1 <- rep(FALSE, length(all_ids))
+      names(is_dominated_phase1) <- all_ids
+      
+      for (i in seq_along(all_ids)) {
+        id_i <- all_ids[i]
+        if (is_dominated_phase1[id_i]) next
+        
+        for (j in seq_along(all_ids)) {
+          id_j <- all_ids[j]
+          if (i == j || is_dominated_phase1[id_j]) next
+          
+          insts_i <- if (id_i %in% colnames(mat_exp1)) which(!is.na(mat_exp1[, id_i])) else integer(0)
+          insts_j <- if (id_j %in% colnames(mat_exp1)) which(!is.na(mat_exp1[, id_j])) else integer(0)
+          
+          common_inst <- intersect(insts_i, insts_j)
+          
+          if (length(common_inst) > 0) { 
+            pair_results_list <- lapply(iraceResults$experiments, function(m) {
+              m[common_inst, c(id_i, id_j), drop = FALSE]
+            })
+            
+            pair_eliminated <- bootstrap_pareto_dominance(
+              results_list = pair_results_list,
+              which_alive = c(1L, 2L),
+              boot_n = boot_n,
+              alpha = boot_alpha,
+              debugLevel = 0L
+            )
+            
+            if (pair_eliminated[1L]) {
+              is_dominated_phase1[id_i] <- TRUE
+              break
+            }
+          }
         }
       }
-    }
+      
+      phase1_survivors <- all_ids[!is_dominated_phase1]
+      
+      cat(sprintf("[DEBUG MO-IRACE V2 - PHASE 1] INTERSECTION PRUNING: Survived %d of %d.\n",
+                  length(phase1_survivors), length(all_ids)))
+      
+      cat("\n=============================================\n")
+      cat("[DEBUG MO-IRACE] PHASE 2: LEVELING\n")
+      cat("=============================================\n")
+      
+      
+      # PHASE 2: Leveling
 
-    if (!is.null(race_state$global_archive) && nrow(race_state$global_archive) > 0) {
-       combined_archive <- rbind(race_state$global_archive, current_front)
-       combined_archive <- unique(combined_archive, by = ".ID.")
-       
-       combined_costs <- rbind(race_state$global_costs, costs_new)
-       combined_costs <- combined_costs[!duplicated(rownames(combined_costs)), , drop=FALSE]
-       
-       n_alive <- nrow(combined_costs)
-       is_dominated <- rep(FALSE, n_alive)
-       for (i in 1:n_alive) {
-         if (is_dominated[i]) next 
-         for (j in 1:n_alive) {
-           if (i == j || is_dominated[j]) next 
-           diff <- as.numeric(combined_costs[j, ]) - as.numeric(combined_costs[i, ])
-           if (all(diff <= 0) && any(diff < 0)) {
-             is_dominated[i] <- TRUE
-             break
-           }
-         }
-       }
-       
-       survivor_ids <- rownames(combined_costs)[!is_dominated]
-       race_state$global_archive <- combined_archive[as.character(combined_archive[[".ID."]]) %in% survivor_ids, , drop = FALSE]
-       race_state$global_costs <- combined_costs[survivor_ids, , drop = FALSE]
-       
-       if (!scenario$quiet) {
-         cat(sprintf("\n[DEBUG MO-IRACE] Updated archive: %d previous + %d new. Still %d non-dominated globals\n", 
-                     nrow(combined_archive) - nrow(current_front), nrow(current_front), length(survivor_ids)))
-       }
-       
-    } else {
-       race_state$global_archive <- current_front
-       race_state$global_costs <- costs_new
-       if (!scenario$quiet) {
-         cat(sprintf("\n[DEBUG MO-IRACE] Archive initiated with %d non-dominated configurations\n", nrow(current_front)))
-       }
-    }
+      ids_new <- as.character(current_front[[".ID."]])
+      valid_ids_new <- intersect(ids_new, colnames(mat_exp1))
+      
+      new_instances_union <- which(rowSums(!is.na(mat_exp1[, valid_ids_new, drop = FALSE])) > 0)
+      
+      cat("New winner saw instances:", paste(new_instances_union, collapse=", "), "\n")
+      
+      total_instances <- nrow(race_state$instances_log)
+      experiments_used_archive <- 0L
+      budget_depleted <- FALSE
+      
+      for (m_inst in new_instances_union) {
+        if (budget_depleted) break
+        if (m_inst > total_instances) next
+        
+        ids_needing_this_inst <- c()
+        for (id_s in phase1_survivors) {
+          if (!(id_s %in% colnames(mat_exp1)) || is.na(mat_exp1[m_inst, id_s])) {
+            ids_needing_this_inst <- c(ids_needing_this_inst, id_s)
+          }
+        }
+        
+        if (length(ids_needing_this_inst) > 0) {
+          cat(sprintf(" -> Evaluating instances %d for configurations: %s\n", m_inst, paste(ids_needing_this_inst, collapse=", ")))
+          
+          if ((experimentsUsed + experiments_used_archive + length(ids_needing_this_inst)) > scenario$maxExperiments) {
+            budget_depleted <- TRUE
+            cat("[DEBUG MO-IRACE V2] Global budget reached. Leveling Stopped.\n")
+            break
+          }
+          
+          confs_to_run <- combined_archive[as.character(combined_archive[[".ID."]]) %in% ids_needing_this_inst, , drop = FALSE]
+          n_confs_run <- nrow(confs_to_run)
+          
+          output <- race_wrapper(
+            race_state = race_state,
+            configurations = confs_to_run,
+            instance_idx = m_inst,
+            bounds = if (is.null(scenario$boundMax)) NULL else rep(scenario$boundMax, n_confs_run),
+            is_exe = rep(TRUE, n_confs_run),
+            scenario = scenario
+          )
+          
+          out_ids <- as.character(output$configuration)
+          for (k in 1:n_objs) {
+            if (m_inst > nrow(iraceResults$experiments[[k]])) {
+              iraceResults$experiments[[k]] <- rbind(iraceResults$experiments[[k]], rep(NA_real_, ncol(iraceResults$experiments[[k]])))
+            }
+            for (cid in out_ids) {
+              if (!(cid %in% colnames(iraceResults$experiments[[k]]))) {
+                new_col <- matrix(NA_real_, nrow = nrow(iraceResults$experiments[[k]]), ncol = 1, dimnames=list(NULL, cid))
+                iraceResults$experiments[[k]] <- cbind(iraceResults$experiments[[k]], new_col)
+              }
+            }
+            
+            vals <- sapply(output$cost, function(x) x[k])
+            iraceResults$experiments[[k]][m_inst, out_ids] <- vals
+          }
+          experiments_used_archive <- experiments_used_archive + n_confs_run
+        }
+      }
+      
+      if (budget_depleted) {
+         cat("[!!!] Global budget drained. Leveling stopped at half.\n")
+      } else if (experiments_used_archive == 0) {
+         cat("[DEBUG MO-IRACE V2 - PHASE 2] Alll configurations leveled.\n")
+      }
+      
+      if (experiments_used_archive > 0) {
+        experimentsUsed <- experimentsUsed + experiments_used_archive
+        if (scenario$maxTime <= 0L) {
+          remainingBudget <- remainingBudget - experiments_used_archive
+        }
+        arch_logs <- race_state$reset_race_experiment_log()
+        set(arch_logs, j = "iteration", value = indexIteration)
+        race_state$experiment_log <- rbindlist(list(race_state$experiment_log, arch_logs), use.names = TRUE)
+      }
 
-    archive_limit <- if (is.null(scenario$paretoArchiveSize)) 100L else scenario$paretoArchiveSize
-    if (archive_limit > 0 && nrow(race_state$global_archive) > archive_limit) {
-      if (!scenario$quiet) cat(sprintf("[DEBUG MO-IRACE] Archive limit %d.\n", archive_limit))
-      race_state$global_archive <- race_state$global_archive[seq_len(archive_limit), , drop = FALSE]
-      survivor_ids_trunc <- as.character(race_state$global_archive[[".ID."]])
-      race_state$global_costs <- race_state$global_costs[survivor_ids_trunc, , drop = FALSE]
-    }
+      cat("\n=============================================\n")
+      cat("[DEBUG MO-IRACE] PHASE 3: FINAL PRUNING\n")
+      cat("=============================================\n")
 
+      # PHASE 3: Final Pruning
 
-    if (!scenario$quiet) {
-      cat("[DEBUG MO-IRACE] Global archive saved on race_state.\n\n")
+      mat_exp1_updated <- iraceResults$experiments[[1]][, phase1_survivors, drop = FALSE]
+      
+      cat("Previous view of Matrix (Rows = Instances, Columns = Configs):\n")
+      print(mat_exp1_updated)
+      
+      all_eval_inst <- which(rowSums(is.na(mat_exp1_updated)) == 0)
+      
+      if (length(all_eval_inst) > 0) {
+        cat("Valid instances (100% completes) for dominance tests:", paste(all_eval_inst, collapse=", "), "\n")
+        
+        surv_results_list <- lapply(iraceResults$experiments, function(m) {
+          m[all_eval_inst, phase1_survivors, drop = FALSE]
+        })
+        
+        final_eliminated <- bootstrap_pareto_dominance(
+          results_list = surv_results_list,
+          which_alive = seq_along(phase1_survivors),
+          boot_n = boot_n,
+          alpha = boot_alpha,
+          debugLevel = scenario$debugLevel
+        )
+        final_survivor_ids <- phase1_survivors[!final_eliminated]
+      } else {
+        cat("Atention: Due to budget limit, there is no common instances completes. Skipping phase 3 to not discard randomly.\n")
+        final_survivor_ids <- phase1_survivors
+      }
+      
+      final_costs <- data.frame(row.names = final_survivor_ids)
+      for (k in seq_along(iraceResults$experiments)) {
+        sub_mat <- iraceResults$experiments[[k]][, final_survivor_ids, drop = FALSE]
+        final_costs[final_survivor_ids, paste0("Objective_", k)] <- colMeans(sub_mat, na.rm = TRUE)
+      }
+      
+      race_state$global_archive <- combined_archive[as.character(combined_archive[[".ID."]]) %in% final_survivor_ids, , drop = FALSE]
+      race_state$global_costs <- final_costs
+      
+      cat(sprintf("\n[DEBUG MO-IRACE V2 - ARCHIVE] Used levelings: %d | Final Front Archive: %d configurations.\n\n", 
+                  experiments_used_archive, length(final_survivor_ids)))
     }
     # ---------------------------------------------------------------
 
