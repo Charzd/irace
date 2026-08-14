@@ -57,7 +57,7 @@ print_mo_statistics <- function(Results, survivor_ids, current_task) {
 
 ## MO-irace:Strict Pareto Dominance
 # Returns vector: TRUE if config is NOt dominated (survive)
-check_pareto_dominance <- function(results_list, which_alive, ids = NULL, debugLevel = 0) {
+check_pareto_dominance_V1 <- function(results_list, which_alive, ids = NULL, debugLevel = 0) {
   if (length(which_alive) == 0) return(logical(0))
   n_objs <- length(results_list)
   n_alive <- length(which_alive)
@@ -65,8 +65,24 @@ check_pareto_dominance <- function(results_list, which_alive, ids = NULL, debugL
   mean_costs <- matrix(NA_real_, nrow = n_alive, ncol = n_objs)
   for(k in 1:n_objs) {
     mat_obj <- results_list[[k]][, which_alive, drop=FALSE]
-    mat_ranks <- rowRanks(mat_obj, ties.method = "average")
+
+    # --- MO-irace V2 ties ---
+    mat_ranks <- rowRanks(mat_obj, ties.method = "min")
     mean_costs[, k] <- colMeans(mat_ranks, na.rm = TRUE)
+    
+    # Debug para empates
+    if (debugLevel >= 2L) {
+      cat(sprintf("\n--- MO-irace V2 DEBUG: TIES METHOD Obj %d ---\n", k))
+      cat("Rankings (last instance):\n")
+      cat(paste(head(mat_ranks[nrow(mat_ranks), ], 10), collapse = ", "), "\n")
+      cat("------------------------------------------------------\n")
+    }
+    # ------------------------
+    # MO-irace
+
+    # mat_ranks <- rowRanks(mat_obj, ties.method = "average")
+    # mean_costs[, k] <- colMeans(mat_ranks, na.rm = TRUE)
+    # ------------------------
   }
   # is_dominated[i] is TRUE if i is dominated 
   is_dominated <- rep(FALSE, n_alive)
@@ -103,6 +119,16 @@ check_pareto_dominance <- function(results_list, which_alive, ids = NULL, debugL
   }
   if (debugLevel >= 1) cat("--- [PARETO] End round. Discarted:", sum(is_dominated), "de", n_alive, "---\n")
   return(!is_dominated) 
+}
+
+check_pareto_dominance_V2 <- function(results_list, which_alive, boot_n = 500L, alpha = 0.90, debugLevel = 0L) {
+  bootstrap_pareto_dominance(
+    results_list = results_list,
+    which_alive = which_alive,
+    boot_n = boot_n,
+    alpha = alpha,
+    debugLevel = debugLevel
+  )
 }
 
 createExperimentList <- function(configurations, parameters,
@@ -1385,10 +1411,22 @@ elitist_race <- function(race_state, maxExp,
       if (n_objs > 1) {
         current_results_list <- lapply(Results, function(m) m[seq_len(current_task), , drop=FALSE])
         real_ids <- configurations[[".ID."]]
-        survivors_logical <- check_pareto_dominance(current_results_list, which_alive, 
-                                                    ids = real_ids, 
-                                                    debugLevel = scenario$debugLevel)
-        ### survivors_logical <- check_pareto_dominance(current_results_list, which_alive, debugLevel = scenario$debugLevel)
+
+        # --- MO-irace V2 ---
+        boot_n <- if (!is.null(scenario$bootstrapCount)) scenario$bootstrapCount else 500L
+        boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.90
+        
+        survivors_logical <- check_pareto_dominance_V2(
+          results_list = current_results_list, 
+          which_alive = which_alive,
+          boot_n = boot_n,
+          alpha = boot_alpha,
+          debugLevel = scenario$debugLevel
+        )
+        # -----------------------
+
+        # survivors_logical <- check_pareto_dominance_V1(current_results_list, which_alive, ids = real_ids,
+        #                                             debugLevel = scenario$debugLevel)
         test.alive <- rep(FALSE, n_configurations) 
         test.alive[which_alive] <- survivors_logical 
 
@@ -1549,8 +1587,21 @@ elitist_race <- function(race_state, maxExp,
   if (n_objs > 1) {
     current_results_list <- lapply(Results, function(m) m[, alive, drop=FALSE])
     which_alive_tmp <- seq_len(sum(alive))
+
+    # --- MO-irace V2 ---
+    boot_n <- if (!is.null(scenario$bootstrapCount)) scenario$bootstrapCount else 500L
+    boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.90
     
-    is_non_dominated <- check_pareto_dominance(current_results_list, which_alive_tmp)
+    is_non_dominated <- check_pareto_dominance_V2(
+      results_list = current_results_list, 
+      which_alive = which_alive_tmp,
+      boot_n = boot_n,
+      alpha = boot_alpha,
+      debugLevel = 0L
+    )
+    # ----------------------------------------------------
+    
+    #is_non_dominated <- check_pareto_dominance_V1(current_results_list, which_alive_tmp)
     race_ranks <- rep(2L, sum(alive))
     race_ranks[is_non_dominated] <- 1L
   } else {

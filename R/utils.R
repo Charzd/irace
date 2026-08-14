@@ -737,5 +737,75 @@ subset_results_rows <- function(results, valid_rows) {
   }
 }
 
+# --- MO-irace V2 ---
+# Pareto Dominance with Bootstrapping
+bootstrap_pareto_dominance <- function(results_list, which_alive, boot_n = 500L, alpha = 0.90, debugLevel = 0L) {
+  n_alive <- length(which_alive)
+  if (n_alive <= 1) return(rep(FALSE, n_alive))
+  
+  n_objs <- length(results_list)
+  # extract submatrices with alive configurations
+  objs_mats <- lapply(seq_len(n_objs), function(k) {
+    results_list[[k]][, which_alive, drop = FALSE]
+  })
+  
+  n_instances <- nrow(objs_mats[[1]])
+  
+  # dominance_counts[j, i]: Times that j domantes i
+  dominance_counts <- matrix(0L, nrow = n_alive, ncol = n_alive)
+  
+  # If we evaluated only one instance. resamples does not varies
+  actual_boot_n <- if (n_instances < 2L) 1L else as.integer(boot_n)
+  
+  for (b in seq_len(actual_boot_n)) {
+    # Resamples for instances (rows)
+    sample_rows <- if (n_instances < 2L) 1L else sample.int(n_instances, replace = TRUE)
+    
+    # Matrix with mean costs for this sample
+    boot_mean_costs <- matrix(NA_real_, nrow = n_alive, ncol = n_objs)
+    for (k in seq_len(n_objs)) {
+      sub_mat <- objs_mats[[k]][sample_rows, , drop = FALSE]
+      ranks_mat <- rowRanks(sub_mat, ties.method = "min")
+      boot_mean_costs[, k] <- colMeans(ranks_mat, na.rm = TRUE)
+    }
+    
+    # Pair-wise Pareto evaluation (j, i)
+    for (i in seq_len(n_alive)) {
+      for (j in seq_len(n_alive)) {
+        if (i != j) {
+          all_better_equal <- all(boot_mean_costs[j, ] <= boot_mean_costs[i, ])
+          at_least_one_better <- any(boot_mean_costs[j, ] < boot_mean_costs[i, ])
+          if (all_better_equal && at_least_one_better) {
+            dominance_counts[j, i] <- dominance_counts[j, i] + 1L
+          }
+        }
+      }
+    }
+  }
+  
+  threshold <- alpha * actual_boot_n
+  is_dominated <- rep(FALSE, n_alive)
+  
+  for (i in seq_len(n_alive)) {
+    if (any(dominance_counts[, i] >= threshold)) {
+      is_dominated[i] <- TRUE
+    }
+  }
+  
+  if (debugLevel >= 2L) {
+    max_dom_pcts <- apply(dominance_counts, 2, max) / actual_boot_n
+    cat(sprintf("\n--- MO-irace V2 DEBUG BOOTSTRAP DOMINANCE (%d muestras, alpha = %.2f) ---\n", actual_boot_n, alpha))
+    cat(sprintf("Alive configurations: %d | Instances: %d\n", n_alive, n_instances))
+    cat("Max %% of dominance by each alive configuration: \n")
+    cat(paste(round(max_dom_pcts, 2), collapse = ", "), "\n")
+    cat("Eliminated configurations in this step:\n")
+    cat(paste(which(is_dominated), collapse = ", "), "\n")
+    cat("---------------------------------------------------------------------------\n")
+  }
+  
+  return(is_dominated)
+}
+# -------------------------------------------------------------------
+
 colAnyNotNAs <- function(x, rows = NULL, cols = NULL, ..., useNames = FALSE)
   !colAlls(x, rows = rows, cols = cols, value = NA, ..., useNames = useNames)
