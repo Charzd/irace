@@ -1465,7 +1465,6 @@ irace_run <- function(scenario)
       }
       
     } else {
-      # Next iterations: 2-phase process (Intersection + Leveling)
       
       combined_archive <- rbind(race_state$global_archive, current_front)
       combined_archive <- unique(combined_archive, by = ".ID.")
@@ -1477,9 +1476,9 @@ irace_run <- function(scenario)
       
       mat_exp1 <- iraceResults$experiments[[1]]
 
-      cat("\n=============================================\n")
+      cat("\n===========================================\n")
       cat("[DEBUG MO-IRACE] PHASE 1: INTERSECTION\n")
-      cat("=============================================\n")
+      cat("===========================================\n")
       cat("Current matrix global dimension:", nrow(mat_exp1), "instances x", ncol(mat_exp1), "historical configurations.\n")
       
       # PHASE 1: Intersection
