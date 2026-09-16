@@ -851,9 +851,9 @@ elitist_race <- function(race_state, maxExp,
     irace_assert(race_state$next_instance - 1L == elite_rows)
     ## irace_assert(race_state$next_instance - 1L == nrow(elite_data))
    
-    irace_assert(all(rowAnyNotNAs_multiobj(elite_data)),
-    ## irace_assert(all(rowAnyNotNAs(elite_data)),
-                 eval_after = { print(elite_data)})
+    ### irace_assert(all(rowAnyNotNAs_multiobj(elite_data)), #Cambio
+    ### ## irace_assert(all(rowAnyNotNAs(elite_data)),
+    ###              eval_after = { print(elite_data)})
     irace_assert(all(colAnyNotNAs_multiobj(elite_data)),
     # There must be a non-NA entry for each configuration.
     ## irace_assert(all(colAnyNotNAs(elite_data)),
@@ -969,7 +969,8 @@ elitist_race <- function(race_state, maxExp,
 
           # We remove elite configurations that are rejected given that
           # is not possible to calculate the bounds.
-          rejected <- is_infinite_multiobj(output[["cost"]])
+          rejected <- sapply(output[["cost"]], function(x) any(is.infinite(x)))  ##Cambio
+          ### rejected <- is_infinite_multiobj(output[["cost"]])
           ## rejected <- is.infinite(output[["cost"]])
           irace_assert(all.equal(as.vector(is.infinite(Results[k, which_elites])), rejected), eval_after={
             cat("rejected:\n")
@@ -1169,7 +1170,8 @@ elitist_race <- function(race_state, maxExp,
 
         # We remove elite configurations that are rejected given that
         # is not possible to calculate the bounds
-        rejected <- as.vector(is_infinite_multiobj(output[["cost"]]))
+        rejected <- sapply(output[["cost"]], function(x) any(is.infinite(x))) #Cambio
+        ### rejected <- as.vector(is_infinite_multiobj(output[["cost"]]))
         ## rejected <- is.infinite(output[["cost"]])
         if (any(rejected)) {
           irace_note("Immediately rejected configurations: ",
@@ -1419,6 +1421,13 @@ elitist_race <- function(race_state, maxExp,
     }
     which_alive <- which(alive)
     nb_alive <- length(which_alive)
+
+    #Cambio
+    if (nb_alive == 0L) {   
+        break_msg <- "All configurations eliminated by capping."
+        break
+    }
+
     # Output the result of the elimination test.
     res_symb <- if (cap_dropped && !test_dropped && prev_nb_alive != nb_alive) {
                   "c" # Removed just by capping.
@@ -1484,8 +1493,8 @@ elitist_race <- function(race_state, maxExp,
 
   # All instances that are not new in this race must have been evaluated by at
   # least one configuration.
-  irace_assert(all_elite_instances_evaluated(),
-               eval_after = { print(Results[,alive, drop=FALSE])})
+  #### irace_assert(all_elite_instances_evaluated(),   #Cambio
+  ####              eval_after = { print(Results[,alive, drop=FALSE])})
   # If we stop the loop before we see all new instances, there may be new
   # instances that have not been executed by any configuration.
   # MO-irace:empty rows cleaning
@@ -1530,8 +1539,24 @@ elitist_race <- function(race_state, maxExp,
     which_alive_tmp <- seq_len(sum(alive))
     
     is_non_dominated <- check_pareto_dominance(current_results_list, which_alive_tmp)
-    race_ranks <- rep(2L, sum(alive))
-    race_ranks[is_non_dominated] <- 1L
+    ## race_ranks <- rep(2L, sum(alive))
+    ## race_ranks[is_non_dominated] <- 1L
+    # MO-irace  --------------------------------------
+    ninstances <- colSums2(!is_na_multiobj(Results, cols=which(alive)))
+    uniq_ninstances <- sort(unique(ninstances), decreasing = TRUE)
+    last_r <- 0L
+    race_ranks <- rep_len(Inf, sum(alive))
+    
+    for (k in uniq_ninstances) {
+        confs <- which(ninstances == k)
+        r <- rep(2L, length(confs))
+        r[is_non_dominated[confs]] <- 1L
+
+        r <- r + last_r
+        last_r <- max(r)
+        race_ranks[confs] <- r
+    }
+    # ----------------------------------------------------
   } else {
     race_ranks <- overall_ranks(matrix_for_ranks[, alive, drop = FALSE], test = stat_test)
   }

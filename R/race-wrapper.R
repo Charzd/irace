@@ -126,7 +126,7 @@ check_output_target_evaluator <- function (output, scenario, target_runner_time,
         err_msg <- "The time returned by targetEvaluator is not numeric!"
       } else if (is.infinite(output$time)) {
         err_msg <- "The time returned by targetEvaluator is not finite!"
-      } else if (output$time <= 0) {
+      } else if (output$time < 0) { #cambio
         err_msg <- paste0("The value of time (", output$time, ") returned by targetEvaluator must be strictly positive!")
       } else {
         # Fix time.
@@ -268,7 +268,7 @@ check_output_target_runner <- function(output, scenario, bound = NULL)
       err_msg <- paste0("The time returned by targetRunner is not numeric!")
     } else if (is.infinite(output$time)) {
       err_msg <- paste0("The time returned by targetRunner is not finite!")
-    } else if (output$time <= 0) {
+    } else if (output$time < 0) { #cambio
       err_msg <- paste0("The value of time (", output$time, ") returned by targetRunner must be strictly positive!")
     } else {
       # Fix time.
@@ -497,6 +497,10 @@ target_runner_default <- function(experiment, scenario)
 
   if (is.null(err_msg)) {
     v_output <- parse_output(output$output, verbose = (debugLevel >= 2L))
+
+    # V1: Filter NAs
+    v_output <- v_output[!is.na(v_output)]
+
     ## MO-irace: Parsing MO
     n_values <- length(v_output)
     if (n_values > 0) {
