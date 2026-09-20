@@ -122,13 +122,14 @@ check_pareto_dominance_V1 <- function(results_list, which_alive, ids = NULL, deb
 }
 
 check_pareto_dominance_V2 <- function(results_list, which_alive, boot_n = 500L, alpha = 0.60, debugLevel = 0L) {
-  bootstrap_pareto_dominance(
+  is_dom <- bootstrap_pareto_dominance(
     results_list = results_list,
     which_alive = which_alive,
     boot_n = boot_n,
     alpha = alpha,
     debugLevel = debugLevel
   )
+  return(!is_dom)
 }
 
 createExperimentList <- function(configurations, parameters,
