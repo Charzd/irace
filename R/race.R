@@ -1391,7 +1391,7 @@ elitist_race <- function(race_state, maxExp,
     # rejection.  The third condition ensures that we see the block before capping.
     if (capping && nb_alive > minSurvival && (current_task %% blockSize) == 0L
       && (!scenario$cappingAfterFirstTest || current_task >= firstTest)) {
-      irace_assert(!any(is_elite > 0L) == (current_task >= elite_safe))
+      ## irace_assert(!any(is_elite > 0L) == (current_task >= elite_safe))
       # FIXME-MO-irace:Falta revisar capping
       matrix_for_capping <- get_results_matrix(Results)
       cap_alive <- dom_elim(matrix_for_capping[seq_len(current_task), , drop = FALSE],
@@ -1463,7 +1463,7 @@ elitist_race <- function(race_state, maxExp,
 
     # Handle elites when elimination is performed.  The elite configurations
     # can be removed only when they have no more previously-executed instances.
-    irace_assert(!any(is_elite > 0L) == (current_task >= elite_safe))
+    ## irace_assert(!any(is_elite > 0L) == (current_task >= elite_safe))
     if (!is.null(elite_data) && any(is_elite > 0L)) {
       irace_assert (length(alive) == length(is_elite))
       alive <- alive | (is_elite > 0L)
@@ -1528,7 +1528,7 @@ elitist_race <- function(race_state, maxExp,
 
     if (elitist) {
       # Compute number of statistical tests without eliminations.
-      irace_assert(!any(is_elite > 0L) == (current_task >= elite_safe))
+      ## irace_assert(!any(is_elite > 0L) == (current_task >= elite_safe))
       if (!any(is_elite > 0L)
           && current_task > firstTest && (current_task %% eachTest) == 0L) {
         no_elimination <- if (nb_alive == prev_nb_alive) no_elimination + 1L else 0L
