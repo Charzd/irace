@@ -126,8 +126,8 @@ check_output_target_evaluator <- function (output, scenario, target_runner_time,
         err_msg <- "The time returned by targetEvaluator is not numeric!"
       } else if (is.infinite(output$time)) {
         err_msg <- "The time returned by targetEvaluator is not finite!"
-      } else if (output$time < 0) { #Cambio
-        err_msg <- paste0("The value of time (", output$time, ") returned by targetEvaluator must be strictly positive!")
+      ###} else if (output$time < 0) { #Cambio
+      ###  err_msg <- paste0("The value of time (", output$time, ") returned by targetEvaluator must be strictly positive!")
       } else {
         # Fix time.
         output$time <- max(output$time, scenario$minMeasurableTime)
@@ -268,8 +268,8 @@ check_output_target_runner <- function(output, scenario, bound = NULL)
       err_msg <- paste0("The time returned by targetRunner is not numeric!")
     } else if (is.infinite(output$time)) {
       err_msg <- paste0("The time returned by targetRunner is not finite!")
-    } else if (output$time < 0) { #Cambio
-      err_msg <- paste0("The value of time (", output$time, ") returned by targetRunner must be strictly positive!")
+    ### } else if (output$time < 0) { #Cambio
+    ###   err_msg <- paste0("The value of time (", output$time, ") returned by targetRunner must be strictly positive!")
     } else {
       # Fix time.
       output$time <- max(output$time, scenario$minMeasurableTime)
@@ -501,14 +501,17 @@ target_runner_default <- function(experiment, scenario)
     # V2: Filter NAs
     v_output <- v_output[!is.na(v_output)]
 
-    ## MO-irace: Parsing MO
+    ## MO-irace V3: Parsing MO
     n_values <- length(v_output)
     if (n_values > 0) {
       if (n_objs > 1) {
          if (n_values >= n_objs) {
              cost <- v_output[1:n_objs]
-             if (n_values >= 2) {
-                 time <- v_output[n_values] 
+             ###if (n_values >= 2) {
+             ###    time <- v_output[n_values] 
+             ###}
+             if (n_values > n_objs) {
+                 time <- v_output[n_objs + 1L] 
              }
          } else {
              err_msg <- paste0("TargetRunner output ", n_values, " values, but MO-irace expects ", n_objs, " objectives.")
