@@ -433,22 +433,6 @@ extractElites <- function(configurations, nbElites, debugLevel)
   if (debugLevel >= 2L && after < before)
     irace_note("Dropped ", before - after, " duplicated elites.\n")
 
-
-  #MO-irace non-pruning elite:
-  ## setorderv(elites, cols=".RANK.")
-  ## if (nrow(elites) > nbElites && elites[[".RANK."]][1] == 1L) {
-  ##   after <- max(nbElites, sum(elites[[".RANK."]] == 1L))
-  ## } else {
-  ##   after <- min(after, nbElites)
-  ## }
-  ## 
-  ## selected <- seq_len(after)
-
-  # Former MO-irace:
-  ## setorderv(elites, cols=".RANK.")
-  ## after <- min(after, nbElites)
-  ## selected <- seq_len(after)
-
   # NEW-ArchiveMO --------------------------------------------------
   random_idx <- sample.int(nrow(elites))
   elites <- elites[random_idx, ]
@@ -462,8 +446,6 @@ extractElites <- function(configurations, nbElites, debugLevel)
   }
   selected <- seq_len(after)
   # ----------------------------------------------------------------
-
-
 
   elites <- elites[selected, ]
   set(elites, j = ".WEIGHT.", value = ((after + 1L) - selected) / (after * (after + 1L) / 2))
@@ -1705,9 +1687,63 @@ irace_run <- function(scenario)
       cat(sprintf("\n[DEBUG MO-IRACE] Dynamic Elite Size for iteration %d: %d (Min: %d, Max: %d)\n", 
                   indexIteration, e_dinamico, e_min, e_max))
     }
+    # MO-irace V3 --------------------------------------------
+    archive <- race_state$global_archive
+    archive_costs <- race_state$global_costs
     
-    elite_configurations <- extractElites(raceResults$configurations,
-      nbElites = e_dinamico, debugLevel = scenario$debugLevel)
+    if (!scenario$quiet && scenario$debugLevel >= 1L) {
+      cat("\n------ [Elites Selection phase] Archive ND vs Survivor ------\n")
+      if (!is.null(archive)) cat("Archive ND Configurations:", paste(archive[[".ID."]], collapse=", "), "\n")
+      cat("Survivors of current race:", paste(raceResults$configurations[[".ID."]], collapse=", "), "\n")
+    }
+
+    if (is.null(archive) || nrow(archive) == 0) {
+      elite_configurations <- extractElites(raceResults$configurations,
+        nbElites = e_dinamico, debugLevel = scenario$debugLevel)
+    } else {
+      if (nrow(archive) >= e_dinamico) {
+        if (!scenario$quiet && scenario$debugLevel >= 1L) {
+          cat(sprintf("Selected from Archive ND (enough for e_dinamico = %d): %s\n", 
+                      e_dinamico, paste(archive[[".ID."]], collapse=", ")))
+        }
+        
+        elite_configurations <- extractElites(archive,
+          nbElites = e_dinamico, debugLevel = scenario$debugLevel, costs_df = archive_costs)
+      } else {
+        n_missing <- e_dinamico - nrow(archive)
+        archive_ids <- archive[[".ID."]]
+        available_survivors <- raceResults$configurations[!(raceResults$configurations[[".ID."]] %in% archive_ids), , drop = FALSE]
+        
+        if (!scenario$quiet && scenario$debugLevel >= 1L) {
+          cat(sprintf("Selected from Archive ND: %s\n", paste(archive_ids, collapse=", ")))
+        }
+
+        if (nrow(available_survivors) > 0) {
+          filled_elites <- extractElites(available_survivors,
+            nbElites = n_missing, debugLevel = scenario$debugLevel)
+          
+          if (!scenario$quiet && scenario$debugLevel >= 1L) {
+            cat(sprintf("Due they are not enough (%d < %d), adding the next %d survivor configurations:\n", 
+                        nrow(archive), e_dinamico, nrow(filled_elites)))
+            cat(paste(filled_elites[[".ID."]], collapse=", "), "\n")
+          }
+          elite_configurations <- rbind(archive, filled_elites)
+        } else {
+          if (!scenario$quiet && scenario$debugLevel >= 1L) {
+             cat("No extra survivors avalable. Only Archive ND.\n")
+          }
+          elite_configurations <- archive
+        }
+        
+        after <- nrow(elite_configurations)
+        selected <- seq_len(after)
+        elite_configurations[[".WEIGHT."]] <- ((after + 1L) - selected) / (after * (after + 1L) / 2)
+      }
+    }
+    if (!scenario$quiet && scenario$debugLevel >= 1L) cat("--------------------------------------------------------------------\n")
+    # --------------------------------------------------------
+    ### elite_configurations <- extractElites(raceResults$configurations,
+    ###   nbElites = e_dinamico, debugLevel = scenario$debugLevel)
     # --------------------------------------------------------
 
     ### elite_configurations <- extractElites(raceResults$configurations,
