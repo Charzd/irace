@@ -704,7 +704,7 @@ irace_common <- function(scenario, simple, output.width = 9999L)
 irace_run <- function(scenario)
 {
   # Recover state from file?
-  cat("\n[DEBUG MO-IRACE] Iniciando irace_run MODIFICADO con Archivo Global\n")
+  cat("\n[DEBUG MO-IRACE V3] Running irace_run with MO-irace V3\n")
   if (is.null.or.empty(scenario$recoveryFile)) {
     race_state <- RaceState$new(scenario)
   } else {
