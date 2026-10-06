@@ -473,11 +473,9 @@ extractElites <- function(configurations, nbElites, debugLevel, costs_df = NULL)
         cat(sprintf("[DEBUG MO-IRACE] extractElites: Crowding Distance calculated for %d configurations of Archive ND.\n", n_elites))
      }
      
-     # Ordenamos primariamente por RANK (ascendente) y luego por CROWDING (descendente)
      setorderv(elites, cols=c(".RANK.", ".CROWDING."), order=c(1L, -1L))
      
   } else {
-     # Fallback si no hay costos: barajado aleatorio original para mantener diversidad
      random_idx <- sample.int(n_elites)
      elites <- elites[random_idx, ]
      setorderv(elites, cols=".RANK.")
@@ -486,8 +484,6 @@ extractElites <- function(configurations, nbElites, debugLevel, costs_df = NULL)
         cat(sprintf("[DEBUG MO-IRACE] extractElites: Shuffled %d survivors (sin Crowding Distance).\n", n_elites))
      }
   }
-  # --- FIN CROWDING DISTANCE ---
-
   after <- min(nrow(elites), nbElites)
   selected <- seq_len(after)
   # ----------------------------------------------------------------
@@ -1752,6 +1748,13 @@ irace_run <- function(scenario)
 
       if (!scenario$quiet) {
         cat(sprintf("Final survivors in the Archive ND: %d configurations.\n", length(final_survivor_ids)))
+        
+        cat("\n[PARSING] Current Pareto Front (Archive ND) configurations:\n")
+        configurations_print(race_state$global_archive, metadata = scenario$debugLevel >= 1L)
+        
+        cat("\n[PARSING] Mean Objective Values for Archive ND:\n")
+        print(race_state$global_costs)
+        
         cat("--------------------------------------\n\n")
       }
     }
