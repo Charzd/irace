@@ -1613,14 +1613,48 @@ irace_run <- function(scenario)
       cat("[DEBUG MO-IRACE] PHASE 3: FINAL PRUNING\n")
       cat("=============================================\n")
 
-      # PHASE 3: Final Pruning
+      # MO-irace V3 ----------------------------------------------------------------------------
 
       mat_exp1_updated <- iraceResults$experiments[[1]][, phase1_survivors, drop = FALSE]
       
       cat("Previous view of Matrix (Rows = Instances, Columns = Configs):\n")
       print(mat_exp1_updated)
       
+      if (budget_depleted) {
+        cat("Atention: Budget depleted detected. Imputing missing values with the worst instance cost...\n")
+       
+        valid_instances_for_imputation <- which(rowSums(!is.na(mat_exp1_updated)) > 0)
+        
+        for (k in seq_along(iraceResults$experiments)) {
+          for (inst in valid_instances_for_imputation) {
+            row_vals <- iraceResults$experiments[[k]][inst, phase1_survivors]
+            
+            if (any(is.na(row_vals)) && any(!is.na(row_vals))) {
+              worst_val <- max(row_vals, na.rm = TRUE)
+              #
+              iraceResults$experiments[[k]][inst, phase1_survivors[is.na(row_vals)]] <- worst_val
+            }
+          }
+        }
+        #
+        mat_exp1_updated <- iraceResults$experiments[[1]][, phase1_survivors, drop = FALSE]
+        
+        cat("View of Matrix after imputation:\n")
+        print(mat_exp1_updated)
+      }
+      
       all_eval_inst <- which(rowSums(is.na(mat_exp1_updated)) == 0)
+      # ---------------------------------------------------------------------------------
+
+      # MO-irace V2 ---------------------------------------------------------------------
+      ## mat_exp1_updated <- iraceResults$experiments[[1]][, phase1_survivors, drop = FALSE]
+      ## 
+      ## cat("Previous view of Matrix (Rows = Instances, Columns = Configs):\n")
+      ## print(mat_exp1_updated)
+      ## 
+      ## all_eval_inst <- which(rowSums(is.na(mat_exp1_updated)) == 0)
+      ## 
+      # ----------------------------------------------------------------------------------
       
       if (length(all_eval_inst) > 0) {
         cat("Valid instances (100% completes) for dominance tests:", paste(all_eval_inst, collapse=", "), "\n")
