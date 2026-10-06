@@ -292,7 +292,7 @@ psRace <- function(iraceResults, max_experiments, conf_ids = NULL, iteration_eli
   scenario$archiveBudgetPercent <- 0.0
 
   if (scenario$debugLevel >= 1L) {
-    irace_note("\n--- MO-irace V2 DEBUG: Post-Selection Race (100% Budget) ---\n")
+    irace_note("\n--- MO-irace V3 DEBUG: Post-Selection Race (100% Budget) ---\n")
   }
   # -------------------
 

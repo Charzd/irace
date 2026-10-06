@@ -72,7 +72,7 @@ check_pareto_dominance_V1 <- function(results_list, which_alive, ids = NULL, deb
     
     # Debug para empates
     if (debugLevel >= 2L) {
-      cat(sprintf("\n--- MO-irace V2 DEBUG: TIES METHOD Obj %d ---\n", k))
+      cat(sprintf("\n--- MO-irace V3 DEBUG: TIES METHOD Obj %d ---\n", k))
       cat("Rankings (last instance):\n")
       cat(paste(head(mat_ranks[nrow(mat_ranks), ], 10), collapse = ", "), "\n")
       cat("------------------------------------------------------\n")
@@ -804,7 +804,7 @@ elitist_race <- function(race_state, maxExp,
   race_max_experiments <- maxExp * (1.0 - archive_budget_pct)
 
   if (scenario$debugLevel >= 1L) {
-    irace_note("\n--- MO-irace V2 DEBUG ---\n")
+    irace_note("\n--- MO-irace V3 DEBUG ---\n")
     irace_note("Total Budget (maxExp) for this race: ", maxExp, "\n")
     irace_note("Archive Reserve (%): ", archive_budget_pct * 100, "%\n")
     irace_note("Effective Race Limit: ", round(race_max_experiments), "\n")
@@ -1144,7 +1144,7 @@ elitist_race <- function(race_state, maxExp,
           ") > race max experiments (", round(race_max_experiments), "). Saving remaining budget for Archive phase.")
           
           if (scenario$debugLevel >= 1L) {
-          irace_note("\n--- MO-irace V2 DEBUG: RACE STOPPED EARLY ---\n")
+          irace_note("\n--- MO-irace V3 DEBUG: RACE STOPPED EARLY ---\n")
           irace_note(break_msg, "\n")
           irace_note("Budget usage: ", experiments_used, " | Reserved left for Archive: ", maxExp - experiments_used, "\n")
           irace_note("---------------------------------------------\n")

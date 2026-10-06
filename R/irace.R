@@ -419,7 +419,8 @@ allConfigurationsInit <- function(scenario)
 # Input: the configurations with the .RANK. field filled.
 #        the number of elites wished
 # Output: nbElites elites, sorted by ranks, with the weights assigned.
-extractElites <- function(configurations, nbElites, debugLevel)
+###extractElites <- function(configurations, nbElites, debugLevel) # MO-irace V2 and below
+extractElites <- function(configurations, nbElites, debugLevel, costs_df = NULL) #MO-irace V3
 {
   irace_assert(nbElites > 0L)
   # Keep only alive configurations.
@@ -433,22 +434,80 @@ extractElites <- function(configurations, nbElites, debugLevel)
   if (debugLevel >= 2L && after < before)
     irace_note("Dropped ", before - after, " duplicated elites.\n")
 
-  # NEW-ArchiveMO --------------------------------------------------
-  random_idx <- sample.int(nrow(elites))
-  elites <- elites[random_idx, ]
-  
-  setorderv(elites, cols=".RANK.")
-  after <- min(nrow(elites), nbElites)
-  
-  if (debugLevel >= 1L) {
-     cat(sprintf("[DEBUG MO-IRACE] extractElites: Shuffled %d survivors, extracting top %d for sampling.\n", 
-                 nrow(elites), after))
+  # MO-irace V3 --------------------------------------------------
+  n_elites <- nrow(elites)
+  elites[, .CROWDING. := 0.0] 
+
+  if (!is.null(costs_df) && n_elites > 2) {
+     
+     valid_ids <- as.character(elites[[".ID."]])
+     available_costs <- costs_df[valid_ids, , drop = FALSE]
+
+     for (k in seq_len(ncol(available_costs))) {
+        obj_vals <- available_costs[[k]]
+        order_idx <- order(obj_vals)
+
+        elites[order_idx[1], .CROWDING. := Inf]
+        elites[order_idx[n_elites], .CROWDING. := Inf]
+
+        min_val <- obj_vals[order_idx[1]]
+        max_val <- obj_vals[order_idx[n_elites]]
+        rango <- max_val - min_val
+
+        if (rango > 1e-9) {
+
+           for (i in 2:(n_elites - 1)) {
+              prev_idx <- order_idx[i - 1]
+              next_idx <- order_idx[i + 1]
+              curr_idx <- order_idx[i]
+              
+              if (is.finite(elites[[".CROWDING."]][curr_idx])) {
+                 dist_add <- (obj_vals[next_idx] - obj_vals[prev_idx]) / rango
+                 elites[curr_idx, .CROWDING. := .CROWDING. + dist_add]
+              }
+           }
+        }
+     }
+     
+     if (debugLevel >= 1L) {
+        cat(sprintf("[DEBUG MO-IRACE] extractElites: Crowding Distance calculated for %d configurations of Archive ND.\n", n_elites))
+     }
+     
+     # Ordenamos primariamente por RANK (ascendente) y luego por CROWDING (descendente)
+     setorderv(elites, cols=c(".RANK.", ".CROWDING."), order=c(1L, -1L))
+     
+  } else {
+     # Fallback si no hay costos: barajado aleatorio original para mantener diversidad
+     random_idx <- sample.int(n_elites)
+     elites <- elites[random_idx, ]
+     setorderv(elites, cols=".RANK.")
+     
+     if (debugLevel >= 1L) {
+        cat(sprintf("[DEBUG MO-IRACE] extractElites: Shuffled %d survivors (sin Crowding Distance).\n", n_elites))
+     }
   }
+  # --- FIN CROWDING DISTANCE ---
+
+  after <- min(nrow(elites), nbElites)
   selected <- seq_len(after)
+  # ----------------------------------------------------------------
+  # New-ArchiveMO ------------------------------------------------
+  ####### random_idx <- sample.int(nrow(elites))
+  ####### elites <- elites[random_idx, ]
+  ####### 
+  ####### setorderv(elites, cols=".RANK.")
+  ####### after <- min(nrow(elites), nbElites)
+  ####### 
+  ####### if (debugLevel >= 1L) {
+  #######    cat(sprintf("[DEBUG MO-IRACE] extractElites: Shuffled %d survivors, extracting top %d for sampling.\n", 
+  #######                nrow(elites), after))
+  ####### }
+  ####### selected <- seq_len(after)
   # ----------------------------------------------------------------
 
   elites <- elites[selected, ]
   set(elites, j = ".WEIGHT.", value = ((after + 1L) - selected) / (after * (after + 1L) / 2))
+  elites[, .CROWDING. := NULL] #MO-irace V3
   setDF(elites)
   rownames(elites) <- elites[[".ID."]]
   elites
@@ -1443,7 +1502,9 @@ irace_run <- function(scenario)
       race_state$global_costs <- costs_init
       
       if (!scenario$quiet) {
-        cat(sprintf("\n[DEBUG MO-IRACE V2] Archive initializated with %d configurations.\n\n", nrow(current_front)))
+        cat("\n------ Updating Archive ND ------\n")
+        cat(sprintf("[Initialization] Archive ND created with %d configurations from Front 1.\n", nrow(current_front)))
+        cat("--------------------------------------\n\n")
       }
       
     } else {
@@ -1458,9 +1519,14 @@ irace_run <- function(scenario)
       
       mat_exp1 <- iraceResults$experiments[[1]]
 
-      cat("\n===========================================\n")
-      cat("[DEBUG MO-IRACE] PHASE 1: INTERSECTION\n")
-      cat("===========================================\n")
+      if (!scenario$quiet) {
+        cat("\n------ Updating Archive ND ------\n")
+        cat(sprintf("Fusion: %d (Archive ND) + %d (current Front 1) = %d unique configurations to evaluate.\n", 
+                    nrow(race_state$global_archive), nrow(current_front), length(all_ids)))
+        cat("\n===========================================\n")
+        cat("[DEBUG MO-IRACE] PHASE 1: INTERSECTION\n")
+        cat("===========================================\n")
+      }
       cat("Current matrix global dimension:", nrow(mat_exp1), "instances x", ncol(mat_exp1), "historical configurations.\n")
       
       # PHASE 1: Intersection
@@ -1502,14 +1568,14 @@ irace_run <- function(scenario)
       }
       
       phase1_survivors <- all_ids[!is_dominated_phase1]
-      
-      cat(sprintf("[DEBUG MO-IRACE V2 - PHASE 1] INTERSECTION PRUNING: Survived %d of %d.\n",
-                  length(phase1_survivors), length(all_ids)))
-      
-      cat("\n=============================================\n")
-      cat("[DEBUG MO-IRACE] PHASE 2: LEVELING\n")
-      cat("=============================================\n")
-      
+
+      if (!scenario$quiet) {
+        cat(sprintf("INTERSECTION PRUNING: Survived %d of %d.\n",
+                    length(phase1_survivors), length(all_ids)))
+        cat("\n=============================================\n")
+        cat("[DEBUG MO-IRACE] PHASE 2: LEVELING\n")
+        cat("=============================================\n")
+      }
       
       # PHASE 2: Leveling
 
@@ -1536,11 +1602,15 @@ irace_run <- function(scenario)
         }
         
         if (length(ids_needing_this_inst) > 0) {
-          cat(sprintf(" -> Evaluating instances %d for configurations: %s\n", m_inst, paste(ids_needing_this_inst, collapse=", ")))
+          if (!scenario$quiet && scenario$debugLevel >= 2L) {
+             cat(sprintf(" -> Evaluating instances %d for configurations: %s\n", m_inst, paste(ids_needing_this_inst, collapse=", ")))
+          }
           
           if ((experimentsUsed + experiments_used_archive + length(ids_needing_this_inst)) > scenario$maxExperiments) {
             budget_depleted <- TRUE
-            cat("[DEBUG MO-IRACE V2] Global budget reached. Leveling Stopped.\n")
+            if (!scenario$quiet) {
+               cat(sprintf(" [!] Global budget reached. Leveling Stopped. Missing %d evaluations.\n", length(ids_needing_this_inst)))
+            }
             break
           }
           
@@ -1575,10 +1645,15 @@ irace_run <- function(scenario)
         }
       }
       
-      if (budget_depleted) {
-         cat("[!!!] Global budget drained. Leveling stopped at half.\n")
-      } else if (experiments_used_archive == 0) {
-         cat("[DEBUG MO-IRACE V2 - PHASE 2] Alll configurations leveled.\n")
+      if (!scenario$quiet) {
+        if (!budget_depleted && experiments_used_archive == 0) {
+           cat(" No configurations required aditional evaluations (All configurations leveled).\n")
+        } else if (!budget_depleted && experiments_used_archive > 0) {
+           cat(sprintf(" Leveling completed successful. Budget inverted: %d evaluations.\n", experiments_used_archive))
+        }
+        cat("\n=============================================\n")
+        cat("[DEBUG MO-IRACE] PHASE 3: FINAL PRUNING\n")
+        cat("=============================================\n")
       }
       
       if (experiments_used_archive > 0) {
@@ -1591,19 +1666,21 @@ irace_run <- function(scenario)
         race_state$experiment_log <- rbindlist(list(race_state$experiment_log, arch_logs), use.names = TRUE)
       }
 
-      cat("\n=============================================\n")
-      cat("[DEBUG MO-IRACE] PHASE 3: FINAL PRUNING\n")
-      cat("=============================================\n")
+      
 
       # MO-irace V3 ----------------------------------------------------------------------------
 
       mat_exp1_updated <- iraceResults$experiments[[1]][, phase1_survivors, drop = FALSE]
-      
-      cat("Previous view of Matrix (Rows = Instances, Columns = Configs):\n")
-      print(mat_exp1_updated)
-      
+
+      if (!scenario$quiet && scenario$debugLevel >= 2L) {
+         cat("Previous view of Matrix (Rows = Instances, Columns = Configs):\n")
+         print(mat_exp1_updated)
+      }
+
       if (budget_depleted) {
-        cat("Atention: Budget depleted detected. Imputing missing values with the worst instance cost...\n")
+        if (!scenario$quiet) {
+          cat("Atention: Budget depleted detected. Imputing missing values with the worst instance cost...\n")
+        }
        
         valid_instances_for_imputation <- which(rowSums(!is.na(mat_exp1_updated)) > 0)
         
@@ -1613,16 +1690,18 @@ irace_run <- function(scenario)
             
             if (any(is.na(row_vals)) && any(!is.na(row_vals))) {
               worst_val <- max(row_vals, na.rm = TRUE)
-              #
+              
               iraceResults$experiments[[k]][inst, phase1_survivors[is.na(row_vals)]] <- worst_val
             }
           }
         }
-        #
+        
         mat_exp1_updated <- iraceResults$experiments[[1]][, phase1_survivors, drop = FALSE]
         
-        cat("View of Matrix after imputation:\n")
-        print(mat_exp1_updated)
+        if (!scenario$quiet && scenario$debugLevel >= 2L) {
+           cat("View of Matrix after imputation:\n")
+           print(mat_exp1_updated)
+        }
       }
       
       all_eval_inst <- which(rowSums(is.na(mat_exp1_updated)) == 0)
@@ -1639,8 +1718,10 @@ irace_run <- function(scenario)
       # ----------------------------------------------------------------------------------
       
       if (length(all_eval_inst) > 0) {
-        cat("Valid instances (100% completes) for dominance tests:", paste(all_eval_inst, collapse=", "), "\n")
-        
+        if (!scenario$quiet && scenario$debugLevel >= 2L) {
+            cat("Valid instances (100% completes) for dominance tests:", paste(all_eval_inst, collapse=", "), "\n")
+        }
+       
         surv_results_list <- lapply(iraceResults$experiments, function(m) {
           m[all_eval_inst, phase1_survivors, drop = FALSE]
         })
@@ -1654,7 +1735,9 @@ irace_run <- function(scenario)
         )
         final_survivor_ids <- phase1_survivors[!final_eliminated]
       } else {
-        cat("Atention: Due to budget limit, there is no common instances completes. Skipping phase 3 to not discard randomly.\n")
+        if (!scenario$quiet) {
+           cat("Atention: Due to budget limit, there is no common instances completes. Skipping phase 3 to not discard randomly.\n")
+        }
         final_survivor_ids <- phase1_survivors
       }
       
@@ -1666,9 +1749,11 @@ irace_run <- function(scenario)
       
       race_state$global_archive <- combined_archive[as.character(combined_archive[[".ID."]]) %in% final_survivor_ids, , drop = FALSE]
       race_state$global_costs <- final_costs
-      
-      cat(sprintf("\n[DEBUG MO-IRACE V2 - ARCHIVE] Used levelings: %d | Final Front Archive: %d configurations.\n\n", 
-                  experiments_used_archive, length(final_survivor_ids)))
+
+      if (!scenario$quiet) {
+        cat(sprintf("Final survivors in the Archive ND: %d configurations.\n", length(final_survivor_ids)))
+        cat("--------------------------------------\n\n")
+      }
     }
     # ---------------------------------------------------------------
 
