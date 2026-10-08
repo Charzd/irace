@@ -90,20 +90,71 @@ updateModel <- function(parameters, eliteConfigurations, oldModel,
   # parent. The condition of the IF statement is for checking whether the
   # configuration already has its model or not.
   elite_ids <- as.character(eliteConfigurations[[".ID."]])
-  not_in <- elite_ids %not_in% model_ids
-  ids_in_model <- elite_ids
-  # If a configuration does not have any entry, copy the parent one.
-  ids_in_model[not_in] <- as.character(eliteConfigurations[[".PARENT."]][not_in])
-  newModel <- setNames(vector("list", length(param_names)), param_names)  
+
+  # MO-irace V3 ----------------------------------------------------------------
+  parent_ids <- as.character(eliteConfigurations[[".PARENT."]])
+
+  source_ids <- rep(NA_character_, length(elite_ids))
+  in_old <- elite_ids %in% model_ids
+  source_ids[in_old] <- elite_ids[in_old]
+
+  parent_in_old <- !in_old & !is.na(parent_ids) & (parent_ids %in% model_ids)
+  source_ids[parent_in_old] <- parent_ids[parent_in_old]
+
+  needs_init <- is.na(source_ids)
+  
+  newModel <- setNames(vector("list", length(param_names)), param_names)
   
   for (currentParameter in param_names) {
     param <- parameters$get(currentParameter)
-    irace_assert(all(ids_in_model %in% names(oldModel[[currentParameter]])))
-    this_model <- oldModel[[currentParameter]][ids_in_model]
+    type <- param[["type"]]
+    
+    this_model <- vector("list", length(elite_ids))
+    names(this_model) <- elite_ids
+
+    if (any(!needs_init)) {
+      this_model[!needs_init] <- oldModel[[currentParameter]][source_ids[!needs_init]]
+    }
+
+    if (any(needs_init)) {
+      if (type == "c") {
+        nbValues <- length(param[["domain"]])
+        init_prob <- rep_len(1. / nbValues, nbValues)
+        this_model[needs_init] <- replicate(sum(needs_init), init_prob, simplify = FALSE)
+      } else {
+        irace_assert(type %in% c("i", "r", "o"))
+        init_sd <- if (type == "o") {
+          (length(param[["domain"]]) - 1L) * 0.5
+        } else {
+          init_sd_numeric(param)
+        }
+        current_sd <- init_sd * (num_factor ^ max(0L, indexIteration - 2L))
+        values_init <- eliteConfigurations[[currentParameter]][needs_init]
+        if (type == "o") {
+          values_init <- match(values_init, param[["domain"]])
+        }
+        this_model[needs_init] <- mapply(c, current_sd, values_init, SIMPLIFY = FALSE, USE.NAMES = FALSE)
+      }
+    }
+
+    irace_assert(!any(vapply(this_model, is.null, logical(1L))))
+  # ------------------------------------------------------------------------------
+  # Former -------------------------------------------------------------------------
+  #### not_in <- elite_ids %not_in% model_ids
+  #### ids_in_model <- elite_ids
+  #### # If a configuration does not have any entry, copy the parent one.
+  #### ids_in_model[not_in] <- as.character(eliteConfigurations[[".PARENT."]][not_in])
+  #### newModel <- setNames(vector("list", length(param_names)), param_names)  
+  #### 
+  #### for (currentParameter in param_names) {
+  ####   param <- parameters$get(currentParameter)
+  ####   irace_assert(all(ids_in_model %in% names(oldModel[[currentParameter]])))
+  ####   this_model <- oldModel[[currentParameter]][ids_in_model]
+  # ------------------------------------------------------------------------------
     values <- eliteConfigurations[[currentParameter]]
     values_not_na <- !is.na(values)
     values <- values[values_not_na]
-    type <- param[["type"]]
+    #### type <- param[["type"]]
     if (type == "c") {
       # Find the value that has been "chosen" to increase its probability.
       values <- match(values, param[["domain"]])

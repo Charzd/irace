@@ -1815,7 +1815,7 @@ irace_run <- function(scenario)
                         nrow(archive), e_dinamico, nrow(filled_elites)))
             cat(paste(filled_elites[[".ID."]], collapse=", "), "\n")
           }
-          filled_elites[[".WEIGHT."]] <- NULL
+          filled_elites[[".WEIGHT."]] <- NULL #MO-irace V3
           elite_configurations <- rbind(archive, filled_elites)
         } else {
           if (!scenario$quiet && scenario$debugLevel >= 1L) {
