@@ -1129,7 +1129,8 @@ irace_run <- function(scenario)
       # MO-irace: Adapted validation
       # We assume that if it was executed for Obj1, it will also be executed for the rest
       mat_check <- get_results_matrix(iraceResults$experiments)
-      irace_assert(sum(!is.na(mat_check)) == experimentsUsed)
+      irace_assert(sum(!is.na(mat_check)) >= experimentsUsed) #MO-irace V3
+      #irace_assert(sum(!is.na(mat_check)) == experimentsUsed)
       
       if (is.null(scenario$targetEvaluator))
         irace_assert(experimentsUsed == nrow(race_state$experiment_log))
