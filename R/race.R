@@ -1416,7 +1416,7 @@ elitist_race <- function(race_state, maxExp,
         real_ids <- configurations[[".ID."]]
 
         # --- MO-irace V2 ---
-        boot_n <- if (!is.null(scenario$bootstrapCount)) scenario$bootstrapCount else 500L
+        boot_n <- if (!is.null(scenario$bootstrapCount) && !is.na(scenario$bootstrapCount)) scenario$bootstrapCount else as.integer(n_objs * 250L)
         boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.60
         
         survivors_logical <- check_pareto_dominance_V2(

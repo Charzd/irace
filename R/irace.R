@@ -1511,7 +1511,7 @@ irace_run <- function(scenario)
       all_ids <- as.character(combined_archive[[".ID."]])
       
       # Matriz to search NAs
-      boot_n <- if (!is.null(scenario$bootstrapCount)) scenario$bootstrapCount else 500L
+      boot_n <- if (!is.null(scenario$bootstrapCount) && !is.na(scenario$bootstrapCount)) scenario$bootstrapCount else as.integer(n_objs * 250L)
       boot_alpha <- if (!is.null(scenario$bootstrapAlpha)) scenario$bootstrapAlpha else 0.60
       
       mat_exp1 <- iraceResults$experiments[[1]]
@@ -1764,7 +1764,7 @@ irace_run <- function(scenario)
     if (debugLevel >= 1L) irace_note("Extracting elites for sampling model\n")
     # NEW-ArchiveMO ------------------------------------------
     e_min <- minSurvival
-    e_max <- if (!is.null(scenario$moElitesMax)) scenario$moElitesMax else 30L
+    e_max <- if (!is.null(scenario$ElitesMax) && !is.na(scenario$ElitesMax)) scenario$ElitesMax else 30L
     
     if (nbIterations > 1L) {
       e_dinamico <- max(e_min, floor(e_max - (e_max - e_min) * ((indexIteration - 1L) / (nbIterations - 1L))))
